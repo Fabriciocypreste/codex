@@ -1,0 +1,182 @@
+@import "tailwindcss";
+@import "./modern-home.css";
+
+/* ===== TV Box / Remote Control Focus Styles ===== */
+/* Global focus-visible ring for ALL interactive elements (D-Pad navigation) */
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible,
+[data-nav-item]:focus-visible {
+  outline: 3px solid #E50914 !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 20px rgba(229, 9, 20, 0.5), 0 0 60px rgba(229, 9, 20, 0.15) !important;
+  transition: outline 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Larger focus ring for TV cards and media items */
+[data-nav-item]:focus-visible {
+  outline-width: 4px;
+  outline-offset: 4px;
+  transform: scale(1.04);
+  z-index: 50;
+}
+
+/* Keyboard-key specific focus for VisionKeyboard */
+.keyboard-key:focus-visible {
+  outline: 2px solid #E50914 !important;
+  outline-offset: 2px;
+  background: rgba(229, 9, 20, 0.3) !important;
+}
+
+/* Remove default outline on mouse click (only show for keyboard/D-Pad) */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+[tabindex]:focus:not(:focus-visible) {
+  outline: none !important;
+}
+
+:root {
+  --red-accent: #ff0000;
+  --red-glow: rgba(255, 0, 0, 0.4);
+  --glass-bg: rgba(255, 255, 255, 0.035);
+  --key-focus: rgba(255, 255, 255, 0.2);
+}
+
+.glass-effect {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.thick-glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.7);
+}
+
+.vision-btn {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.4s cubic-bezier(0.15, 0, 0.15, 1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.vision-btn:hover, .vision-btn:focus {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-3px) scale(1.05);
+  outline: none;
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.vision-btn-highlight {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+}
+
+.keyboard-key {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(15px);
+  font-weight: 700;
+  font-size: 1.2rem;
+  transition: all 0.2s cubic-bezier(0.1, 0, 0.1, 1);
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.keyboard-key:hover, .keyboard-key:focus {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.15) translateZ(20px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 0 0 15px rgba(255, 255, 255, 0.3);
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.keyboard-key:active {
+  transform: scale(0.95);
+}
+
+.tilt-container {
+  perspective: 1500px;
+  transform-style: preserve-3d;
+}
+.tilt-card {
+  transition: transform 0.25s cubic-bezier(0.1, 0, 0.1, 1);
+  transform-style: preserve-3d;
+}
+.tilt-shine {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255,255,255,0.2) 0%, transparent 75%);
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.5s;
+  border-radius: inherit;
+}
+.tilt-container:hover .tilt-shine {
+  opacity: 1;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.mask-vignette {
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.red-text-glow {
+  text-shadow: 0 0 25px rgba(255, 0, 0, 0.7);
+}
+
+.poster-aura {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(circle at center, rgba(255, 0, 0, 0.2) 0%, transparent 70%);
+  filter: blur(40px);
+  z-index: -1;
+  opacity: 0.6;
+  animation: aura-pulse 4s ease-in-out infinite;
+}
+
+@keyframes aura-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.1); opacity: 0.7; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.animate-float { animation: float 6s ease-in-out infinite; }
+
+.responsive-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+@media (min-width: 768px) {
+  .responsive-container { padding: 0 3rem; }
+}
+
+.vision-glow {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 5;
+  border-radius: 50%;
+  mix-blend-mode: soft-light;
+  transition: transform 0.1s ease-out;
+}
