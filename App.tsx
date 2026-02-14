@@ -12,22 +12,46 @@ import LiveTV from './pages/LiveTV';
 import Details from './pages/Details';
 import Player from './pages/Player';
 import Settings from './pages/Settings';
+import Search from './pages/Search';
 import Navigation from './components/Navigation';
 
-// Admin Pages
-import AdminDashboard from './pages/admin/Dashboard';
-import AdminSubscribers from './pages/admin/Subscribers';
-import AdminFinance from './pages/admin/Finance';
-import AdminIPTV from './pages/admin/IPTV';
-import AdminVOD from './pages/admin/VOD';
-import AdminResellers from './pages/admin/Resellers';
-import AdminSecurity from './pages/admin/Security';
-import AdminSettings from './pages/admin/Settings';
-import AdminCatalogControl from './pages/admin/CatalogControl';
-import AdminIngestion from './pages/admin/Ingestion';
-import StreamTester from './pages/admin/StreamTester';
+// Admin Pages — Lazy loaded (só carrega quando acessar /admin)
+const AdminDashboard = React.lazy(() => import('./pages/admin/Dashboard'));
+const AdminSubscribers = React.lazy(() => import('./pages/admin/Subscribers'));
+const AdminFinance = React.lazy(() => import('./pages/admin/Finance'));
+const AdminIPTV = React.lazy(() => import('./pages/admin/IPTV'));
+const AdminVOD = React.lazy(() => import('./pages/admin/VOD'));
+const AdminResellers = React.lazy(() => import('./pages/admin/Resellers'));
+const AdminSecurity = React.lazy(() => import('./pages/admin/Security'));
+const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
+const AdminCatalogControl = React.lazy(() => import('./pages/admin/CatalogControl'));
+const AdminIngestion = React.lazy(() => import('./pages/admin/Ingestion'));
+const StreamTester = React.lazy(() => import('./pages/admin/StreamTester'));
+const AdminP2PSettings = React.lazy(() => import('./pages/admin/P2PSettings'));
+import AdminRoute from './components/AdminRoute';
+
+// Suspense fallback para lazy loading
+const LazyFallback = () => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, rgba(229,9,20,0.06) 0%, rgba(11,11,15,0.97) 60%, #0B0B0F 100%)' }}>
+    <div className="flex flex-col items-center gap-5">
+      <div className="relative">
+        <svg className="w-20 h-20 animate-spin" style={{ animationDuration: '2.5s' }} viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(229,9,20,0.15)" strokeWidth="2" />
+          <circle cx="40" cy="40" r="36" fill="none" stroke="#E50914" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="60 170" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <img src="/logored.png" alt="REDX" className="h-8 w-auto object-contain opacity-80" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+        </div>
+      </div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-white/25">Carregando...</p>
+    </div>
+  </div>
+);
 
 import { getAllMovies, getAllSeries } from './services/supabaseService';
+import { getCatalogWithFilters } from './services/supabaseService';
+import { getCatalogSettings } from './services/catalogService';
+import { canAccessContent } from './services/profileService';
 import { fetchTMDBCatalog } from './services/tmdbCatalog';
 import { getStreamUrl, clearStreamCache } from './services/streamService';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -71,27 +95,33 @@ const LegacyAppInner: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 1. Fetch Real Content (Movies & Series)
-        const [dbMovies, dbSeries] = await Promise.all([
-          getAllMovies(),
-          getAllSeries()
-        ]);
+        // 1. Buscar configurações do catálogo
+        const catalogSettings = await getCatalogSettings();
+
+        // 2. Preparar filtros — mínimo 2018 sempre
+          // Filtro mínimo de ano alterado para 2022 (para testes)
+          const filters = catalogSettings ? {
+            minYear: 2022,
+            maxYear: catalogSettings.max_year,
+            genres: catalogSettings.selected_genres,
+            contentType: catalogSettings.content_type
+          } : { minYear: 2022 };
+
+        // 3. Fetch Real Content com filtros aplicados
+        const { movies: dbMovies, series: dbSeries } = await getCatalogWithFilters(filters);
 
         let dbMoviesTyped = (dbMovies || []).map(m => ({ ...m, type: 'movie' as const })) as Media[];
         let dbSeriesTyped = (dbSeries || []).map(s => ({ ...s, type: 'series' as const })) as Media[];
 
-        // 2. Client-side Deduplication
+        // 4. Client-side Deduplication
         dbMoviesTyped = removeDuplicates(dbMoviesTyped);
         dbSeriesTyped = removeDuplicates(dbSeriesTyped);
 
-        // 3. Filtro de ano desativado temporariamente para restaurar visibilidade
-        // dbMoviesTyped = dbMoviesTyped.filter(m => (m.year || 0) >= 2018);
-
-        // Sanitizar: remover temporadas soltas, itens inválidos
+        // 5. Sanitizar: remover temporadas soltas, itens inválidos
         const cleanMovies = sanitizeMediaList(dbMoviesTyped);
         const cleanSeries = sanitizeMediaList(dbSeriesTyped);
 
-        // Exibir dados do DB imediatamente
+        // 6. Exibir dados do DB
         setMovies(cleanMovies);
         setSeries(cleanSeries);
 
@@ -133,6 +163,15 @@ const LegacyAppInner: React.FC = () => {
   };
 
   const handlePlayMedia = async (media: Media) => {
+    // Verificação de Controle Parental
+    if (activeProfile && !canAccessContent(activeProfile, media.rating)) {
+      console.warn(`[Parental] Blocked content "${media.title}" (Rating: ${media.rating}) for profile "${activeProfile.name}"`);
+      playBackSound();
+      // Em um app real, seria um modal bonito. Por enquanto, alert é funcional.
+      alert(`Conteúdo bloqueado pela classificação indicativa (${media.rating || 'N/A'}).`);
+      return;
+    }
+
     console.log(`[handlePlayMedia] "${media.title}" | stream_url: ${media.stream_url ? 'SIM' : 'NÃO'} | tmdb_id: ${media.tmdb_id}`);
 
     // Se já tem stream_url, abrir direto
@@ -234,9 +273,19 @@ const LegacyAppInner: React.FC = () => {
   const renderPage = () => {
     if (loading && currentPage !== Page.LOGIN) {
       return (
-        <div className="flex flex-col items-center justify-center h-full gap-4">
-          <div className="w-16 h-16 border-4 border-[#E50914] border-t-transparent rounded-full animate-spin" />
-          <p className="text-white/40 font-medium tracking-widest uppercase">Carregando...</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, rgba(229,9,20,0.06) 0%, rgba(11,11,15,0.97) 60%, #0B0B0F 100%)' }}>
+          <div className="flex flex-col items-center gap-5">
+            <div className="relative">
+              <svg className="w-20 h-20 animate-spin" style={{ animationDuration: '2.5s' }} viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(229,9,20,0.15)" strokeWidth="2" />
+                <circle cx="40" cy="40" r="36" fill="none" stroke="#E50914" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="60 170" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <img src="/logored.png" alt="REDX" className="h-8 w-auto object-contain opacity-80" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+              </div>
+            </div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-white/25">Carregando catálogo</p>
+          </div>
         </div>
       );
     }
@@ -277,7 +326,7 @@ const LegacyAppInner: React.FC = () => {
           onPlayMedia={handlePlayMedia}
         />;
       case Page.KIDS:
-        return <Kids movies={movies} onSelectMedia={(m) => navigate(Page.DETAILS, m)} onPlayMedia={handlePlayMedia} />;
+        return <Kids movies={movies} series={series} onSelectMedia={(m) => navigate(Page.DETAILS, m)} onPlayMedia={handlePlayMedia} />;
       case Page.MY_LIST:
         return <MyList onSelectMedia={(m) => navigate(Page.DETAILS, m)} onPlayMedia={handlePlayMedia} />;
       case Page.LIVE:
@@ -304,6 +353,8 @@ const LegacyAppInner: React.FC = () => {
         return <AdminDashboard />;
       case Page.SETTINGS:
         return <Settings onBack={() => setCurrentPage(Page.HOME)} />;
+      case Page.SEARCH:
+        return <Search onSelectMedia={(m) => navigate(Page.DETAILS, m)} onPlayMedia={handlePlayMedia} />;
       default:
         return <Home movies={movies} series={series} trendingMovies={trendingMovies} trendingSeries={trendingSeries} moviesByGenre={moviesByGenre} seriesByGenre={seriesByGenre} onSelectMedia={(m) => navigate(Page.DETAILS, m)} />;
     }
@@ -341,7 +392,7 @@ const LegacyAppInner: React.FC = () => {
 
       {/* Navigation Header (Top - Transparent) */}
       {showNav && (
-        <header className="fixed top-0 left-0 right-0 z-50 flex items-center pointer-events-none bg-gradient-to-b from-black/80 to-transparent pt-4 pb-12 px-12">
+        <header className="fixed top-0 left-0 right-0 z-50 flex items-center pointer-events-none bg-linear-to-b from-black/80 to-transparent pt-4 pb-12 px-12">
           <div className="w-full pointer-events-auto">
             <Navigation
               currentPage={currentPage}
@@ -376,17 +427,19 @@ const App: React.FC = () => {
       <AuthProvider>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/subscribers" element={<AdminSubscribers />} />
-            <Route path="/admin/finance" element={<AdminFinance />} />
-            <Route path="/admin/iptv" element={<AdminIPTV />} />
-            <Route path="/admin/vod" element={<AdminVOD />} />
-            <Route path="/admin/resellers" element={<AdminResellers />} />
-            <Route path="/admin/security" element={<AdminSecurity />} />
-            <Route path="/admin/settings" element={<AdminSettings />} />
-            <Route path="/admin/catalog" element={<AdminCatalogControl />} />
-            <Route path="/admin/ingestion" element={<AdminIngestion />} />
-            <Route path="/admin/stream-test" element={<StreamTester />} />
+            {/* Rotas Admin — protegidas por AdminRoute, lazy-loaded com Suspense */}
+            <Route path="/admin" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminDashboard /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/subscribers" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminSubscribers /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/finance" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminFinance /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/iptv" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminIPTV /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/vod" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminVOD /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/resellers" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminResellers /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/security" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminSecurity /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/settings" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminSettings /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/catalog" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminCatalogControl /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/ingestion" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminIngestion /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/stream-test" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><StreamTester /></React.Suspense></AdminRoute>} />
+            <Route path="/admin/p2p" element={<AdminRoute><React.Suspense fallback={<LazyFallback />}><AdminP2PSettings /></React.Suspense></AdminRoute>} />
             {/* Fallback to legacy app for all other routes */}
             <Route path="/*" element={<LegacyApp />} />
           </Routes>

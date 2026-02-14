@@ -14,23 +14,43 @@ export default defineConfig({
       }
     },
     build: {
+      target: 'es2020',
       sourcemap: false,
       minify: 'terser',
       terserOptions: {
         compress: {
           drop_console: true,
           drop_debugger: true,
+          passes: 2,
+        },
+        mangle: {
+          safari10: true,
         },
       },
       rollupOptions: {
         output: {
           manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            // Core — sempre carregado
+            'vendor-react': ['react', 'react-dom'],
+            // Router — carregado no boot
+            'vendor-router': ['react-router-dom'],
+            // Supabase — dados
             'vendor-supabase': ['@supabase/supabase-js'],
-            'vendor-ui': ['framer-motion', 'lucide-react', 'recharts'],
-          }
-        }
+            // Player — HLS.js separado (só carrega ao abrir player)
+            'vendor-player': ['hls.js'],
+            // UI libs — framer-motion + lucide
+            'vendor-ui': ['framer-motion', 'lucide-react'],
+            // Recharts — admin only (TV Box nunca carrega)
+            'vendor-charts': ['recharts'],
+          },
+        },
       },
-      chunkSizeWarningLimit: 1000,
-    }
+      chunkSizeWarningLimit: 500,
+      // Comprimir melhor
+      cssMinify: true,
+      assetsInlineLimit: 4096,
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-router-dom'],
+    },
 });

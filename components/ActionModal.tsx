@@ -69,7 +69,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ media, isOpen, onClose, onSel
             try {
               const tmdbId = media.tmdb_id || Number(media.id);
               if (tmdbId) {
-                userService.toggleLibraryItem(tmdbId, media.type).catch(() => {});
+                userService.toggleLibraryItem(tmdbId, media.type, 'watchlist').catch(() => {});
               }
             } catch {}
             if (onToggleList) onToggleList();

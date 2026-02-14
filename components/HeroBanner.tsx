@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tmdb, getImageUrl, fetchDetails } from '../services/tmdb';
 import { Media } from '../types';
-import { Play, Info } from 'lucide-react';
+import { Play, Info, Volume2, VolumeX } from 'lucide-react';
 import { playSelectSound } from '../utils/soundEffects';
 
 const IMAGE_BASE = 'https://image.tmdb.org/t/p/original';
@@ -20,7 +20,7 @@ function normalizeTitle(t: string): string {
 }
 
 const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia, onSelectMedia, dbMedia }) => {
-  const [movies, setMovies] = useState<any[]>([]);
+  const [bannerItems, setBannerItems] = useState<any[]>([]);
   const [streamUrlMap, setStreamUrlMap] = useState<Map<string, string>>(new Map());
   const [tmdbUrlMap, setTmdbUrlMap] = useState<Map<number, string>>(new Map());
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -28,34 +28,42 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
   const [showTrailer, setShowTrailer] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [trailerReady, setTrailerReady] = useState(false);
 
   const timeoutRef = useRef<number | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // 1. CARREGAR LISTA DE FILMES
+  // 1. CARREGAR TRENDING DO TMDB + CONTEÚDO REAL DO SUPABASE
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Buscar trending do TMDB
         const data = await tmdb.getTrending();
-        if (data && data.results && data.results.length > 0) {
-          let filtered = data.results;
+        if (!data?.results?.length) return;
 
-          if (mediaType === 'movie') {
-            filtered = filtered.filter((m: any) => m.media_type === 'movie');
-          } else if (mediaType === 'tv') {
-            filtered = filtered.filter((m: any) => m.media_type === 'tv');
-          }
+        let filtered = data.results;
 
-          setMovies(filtered.slice(0, 8));
+        if (mediaType === 'movie') {
+          filtered = filtered.filter((m: any) => m.media_type === 'movie');
+        } else if (mediaType === 'tv') {
+          filtered = filtered.filter((m: any) => m.media_type === 'tv');
         }
+
+        // Filtrar só conteúdo de 2018+ com poster
+        const since2018 = filtered.filter((m: any) => {
+          const year = new Date(m.release_date || m.first_air_date || '').getFullYear();
+          return year >= 2018 && m.poster_path && m.backdrop_path;
+        });
+
+        setBannerItems(since2018.slice(0, 12));
       } catch (e) {
-        console.error("Erro banner:", e);
+        console.error("Erro ao carregar banner:", e);
       }
     };
     loadData();
   }, [mediaType]);
 
-  // Construir mapa de stream_url a partir do catálogo do Supabase
-  // PRIORIDADE: TMDB ID > Título Exato
+  // Construir mapas de stream_url do Supabase (TMDB ID e Título)
   useEffect(() => {
     if (!dbMedia || dbMedia.length === 0) return;
 
@@ -64,38 +72,40 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
 
     dbMedia.forEach(item => {
       if (!item.stream_url) return;
-
-      // Mapear por TMDB ID (Mais preciso)
-      if (item.tmdb_id) {
-        idMap.set(item.tmdb_id, item.stream_url);
-      }
-
-      // Mapear por Título (Fallback)
-      if (item.title) {
-        titleMap.set(normalizeTitle(item.title), item.stream_url);
-      }
+      if (item.tmdb_id) idMap.set(item.tmdb_id, item.stream_url);
+      if (item.title) titleMap.set(normalizeTitle(item.title), item.stream_url);
     });
 
     setStreamUrlMap(titleMap);
     setTmdbUrlMap(idMap);
   }, [dbMedia]);
 
-  // 2. ORQUESTRAÇÃO DO TEMPO (IMAGEM -> VÍDEO -> PRÓXIMO)
+  // 2. ORQUESTRAÇÃO: POSTER 5s → TRAILER 15s → PRÓXIMO
   useEffect(() => {
-    if (movies.length === 0) return;
+    if (bannerItems.length === 0) return;
 
-    const currentMovie = movies[currentIndex];
+    const currentMovie = bannerItems[currentIndex];
 
+    // Reset estado
     setShowTrailer(false);
     setTrailerKey(null);
+    setTrailerReady(false);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     const runCycle = async () => {
       try {
         const details = await fetchDetails(currentMovie.id, currentMovie.media_type || 'movie');
-        const trailer = details?.videos?.results?.find((v: any) => v.type === 'Trailer');
 
-        // Extrair logo das imagens (pt > en > qualquer)
+        // Buscar trailer (prioridade: dublado PT → qualquer trailer)
+        const trailerPT = details?.videos?.results?.find(
+          (v: any) => v.type === 'Trailer' && v.site === 'YouTube' && (v.iso_639_1 === 'pt' || v.name?.toLowerCase().includes('dublado'))
+        );
+        const trailerAny = details?.videos?.results?.find(
+          (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
+        );
+        const trailer = trailerPT || trailerAny;
+
+        // Logo (pt > en > qualquer)
         const logoData = details?.images?.logos?.find((l: any) => l.iso_639_1 === 'pt')
           || details?.images?.logos?.find((l: any) => l.iso_639_1 === 'en')
           || details?.images?.logos?.[0];
@@ -104,23 +114,25 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
         if (trailer) {
           setTrailerKey(trailer.key);
 
-          // ETAPA A: Espera 5 segundos vendo a imagem estática
+          // ETAPA A: Mostra poster por 5 segundos
           timeoutRef.current = window.setTimeout(() => {
             setShowTrailer(true);
 
-            // ETAPA B: Deixa o vídeo rodar por 25 segundos, depois troca
+            // ETAPA B: Trailer roda por 15 segundos, depois troca
             timeoutRef.current = window.setTimeout(() => {
               nextMovie();
-            }, 25000);
+            }, 15000);
 
           }, 5000);
         } else {
+          // Sem trailer — mostra poster por 8s e avança
           timeoutRef.current = window.setTimeout(() => {
             nextMovie();
           }, 8000);
         }
       } catch (e) {
-        nextMovie();
+        // Erro — avança após 5s
+        timeoutRef.current = window.setTimeout(() => nextMovie(), 5000);
       }
     };
 
@@ -129,64 +141,146 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [currentIndex, movies]);
+  }, [currentIndex, bannerItems]);
 
-  const nextMovie = () => {
-    setCurrentIndex((prev) => (prev + 1) % movies.length);
-  };
+  const nextMovie = useCallback(() => {
+    setCurrentIndex((prev) => (prev + 1) % bannerItems.length);
+  }, [bannerItems.length]);
 
-  if (movies.length === 0) return <div className="h-[80vh] bg-black animate-pulse" />;
+  const buildMediaItem = useCallback((movie: any): Media => {
+    const streamUrl = tmdbUrlMap.get(movie.id) || streamUrlMap.get(normalizeTitle(movie.title || movie.name));
+    return {
+      id: String(movie.id),
+      tmdb_id: movie.id,
+      title: movie.title || movie.name,
+      type: movie.media_type === 'tv' ? 'series' : 'movie',
+      description: movie.overview,
+      poster: getImageUrl(movie.poster_path, 'w500'),
+      backdrop: getImageUrl(movie.backdrop_path, 'original'),
+      year: new Date(movie.release_date || movie.first_air_date || '').getFullYear() || undefined,
+      rating: movie.vote_average?.toFixed(1),
+      genre: [],
+      stars: [],
+      stream_url: streamUrl,
+    };
+  }, [tmdbUrlMap, streamUrlMap]);
 
-  const movie = movies[currentIndex];
+  if (bannerItems.length === 0) {
+    return (
+      <div className="h-[85vh] bg-black animate-pulse flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-[#E50914] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const movie = bannerItems[currentIndex];
 
   return (
-    <div className="absolute top-0 left-0 w-screen h-screen overflow-hidden z-0">
+    <div className="absolute top-0 left-0 w-screen h-[85vh] overflow-hidden z-0">
       <div className="relative h-full w-full overflow-hidden bg-black group">
         <AnimatePresence mode='wait'>
           <motion.div
-            key={movie.id}
+            key={`banner-${movie.id}-${currentIndex}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.8 }}
             className="absolute inset-0"
           >
-            {/* === FUNDO (VÍDEO OU IMAGEM) === */}
+            {/* === FUNDO: POSTER/BACKDROP (sempre visível como base) === */}
             <div className="absolute inset-0 w-full h-full">
               <img
                 src={getImageUrl(movie.backdrop_path, 'original')}
-                alt={movie.title}
-                className="w-full h-full object-cover"
+                alt={movie.title || movie.name}
+                className={`w-full h-full object-cover transition-opacity duration-1000 ${showTrailer && trailerKey ? 'opacity-0' : 'opacity-100'}`}
               />
-
-              {/* Gradientes para leitura do texto (Estilo Prime Video: Vignette forte na esquerda) */}
-              <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent"></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
             </div>
 
-            {/* === CONTEÚDO === */}
-            <div className="absolute top-1/2 left-12 -translate-y-1/3 max-w-xl space-y-4 z-20">
-              {/* Logo */}
-              <motion.img
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.8 }}
-                src={logoUrl}
-                alt={movie.title || movie.name}
-                className="max-w-[150px] md:max-w-[210px] h-auto object-contain drop-shadow-2xl mt-32"
-              />
+            {/* === TRAILER YOUTUBE (sobrepõe a imagem após 5s) === */}
+            {showTrailer && trailerKey && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1.2 }}
+                className="absolute inset-0 w-full h-full z-10"
+              >
+                <iframe
+                  ref={iframeRef}
+                  src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&loop=0&start=0&enablejsapi=1&origin=${window.location.origin}`}
+                  title="Trailer"
+                  className="w-full h-full object-cover pointer-events-none"
+                  style={{ 
+                    border: 'none',
+                    /* Scale up para esconder bordas pretas do YouTube */
+                    transform: 'scale(1.25)',
+                    transformOrigin: 'center center',
+                  }}
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
+                />
+              </motion.div>
+            )}
 
-              {/* Sinopse Curta */}
+            {/* Gradientes para leitura do texto */}
+            <div className="absolute inset-0 bg-linear-to-r from-black/90 via-black/50 to-transparent z-20"></div>
+            <div className="absolute inset-0 bg-linear-to-t from-black via-transparent to-transparent z-20"></div>
+
+            {/* === CONTEÚDO TEXTUAL === */}
+            <div className="absolute bottom-[18%] left-12 max-w-xl space-y-3 z-30">
+              {/* Logo do título */}
+              {logoUrl ? (
+                <motion.img
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.8 }}
+                  src={logoUrl}
+                  alt={movie.title || movie.name}
+                  className="max-w-[150px] md:max-w-[210px] h-auto object-contain drop-shadow-2xl"
+                />
+              ) : (
+                <motion.h1
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.8 }}
+                  className="text-3xl md:text-5xl font-black text-white drop-shadow-2xl"
+                >
+                  {movie.title || movie.name}
+                </motion.h1>
+              )}
+
+              {/* Ano e Rating */}
+              <motion.div
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.2, duration: 0.6 }}
+                className="flex items-center gap-3 text-sm text-white/60"
+              >
+                {movie.release_date || movie.first_air_date ? (
+                  <span className="bg-white/10 px-2 py-0.5 rounded text-white/80 font-medium">
+                    {new Date(movie.release_date || movie.first_air_date).getFullYear()}
+                  </span>
+                ) : null}
+                {movie.vote_average ? (
+                  <span className="flex items-center gap-1">
+                    <span className="text-yellow-400">★</span> {movie.vote_average.toFixed(1)}
+                  </span>
+                ) : null}
+                <span className="uppercase text-xs tracking-wider text-white/40">
+                  {movie.media_type === 'tv' ? 'Série' : 'Filme'}
+                </span>
+              </motion.div>
+
+              {/* Sinopse */}
               <motion.p
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.3, duration: 0.8 }}
-                className="text-white/80 text-sm md:text-base font-medium max-w-[260px] drop-shadow-md line-clamp-2 leading-relaxed"
+                className="text-white/80 text-sm md:text-base font-medium max-w-[320px] drop-shadow-md line-clamp-2 leading-relaxed"
               >
                 {movie.overview}
               </motion.p>
 
-              {/* TV Action Buttons — D-Pad focusable */}
+              {/* Botões D-Pad */}
               <motion.div
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -203,21 +297,7 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                     transition-all duration-200 outline-none focus:ring-2 focus:ring-white focus:scale-105"
                   onClick={() => {
                     playSelectSound();
-                    const streamUrl = tmdbUrlMap.get(movie.id) || streamUrlMap.get(normalizeTitle(movie.title || movie.name));
-                    const mediaItem: Media = {
-                      id: String(movie.id),
-                      tmdb_id: movie.id,
-                      title: movie.title || movie.name,
-                      type: movie.media_type === 'tv' ? 'series' : 'movie',
-                      description: movie.overview,
-                      poster: getImageUrl(movie.poster_path, 'w500'),
-                      backdrop: getImageUrl(movie.backdrop_path, 'original'),
-                      year: new Date(movie.release_date || movie.first_air_date || '').getFullYear() || undefined,
-                      rating: movie.vote_average?.toFixed(1),
-                      genre: [],
-                      stars: [],
-                      stream_url: streamUrl,
-                    };
+                    const mediaItem = buildMediaItem(movie);
                     if (onPlayMedia) onPlayMedia(mediaItem);
                     else if (onSelectMedia) onSelectMedia(mediaItem);
                   }}
@@ -235,35 +315,37 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                     transition-all duration-200 outline-none focus:ring-2 focus:ring-white focus:scale-105"
                   onClick={() => {
                     playSelectSound();
-                    const streamUrl = tmdbUrlMap.get(movie.id) || streamUrlMap.get(normalizeTitle(movie.title || movie.name));
-                    const mediaItem: Media = {
-                      id: String(movie.id),
-                      tmdb_id: movie.id,
-                      title: movie.title || movie.name,
-                      type: movie.media_type === 'tv' ? 'series' : 'movie',
-                      description: movie.overview,
-                      poster: getImageUrl(movie.poster_path, 'w500'),
-                      backdrop: getImageUrl(movie.backdrop_path, 'original'),
-                      year: new Date(movie.release_date || movie.first_air_date || '').getFullYear() || undefined,
-                      rating: movie.vote_average?.toFixed(1),
-                      genre: [],
-                      stars: [],
-                      stream_url: streamUrl,
-                    };
+                    const mediaItem = buildMediaItem(movie);
                     if (onSelectMedia) onSelectMedia(mediaItem);
                   }}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLElement).click(); } }}
                 >
                   <Info size={16} /> Detalhes
                 </button>
+
+                {/* Botão Mute/Unmute (só aparece durante trailer) */}
+                {showTrailer && trailerKey && (
+                  <button
+                    tabIndex={0}
+                    data-nav-item
+                    data-nav-col={2}
+                    className="flex items-center justify-center w-10 h-10 rounded-full bg-white/10 border border-white/20 text-white
+                      hover:bg-white/25 hover:scale-105 active:scale-95
+                      transition-all duration-200 outline-none focus:ring-2 focus:ring-white focus:scale-105"
+                    onClick={() => setIsMuted(!isMuted)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setIsMuted(!isMuted); } }}
+                  >
+                    {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                  </button>
+                )}
               </motion.div>
             </div>
           </motion.div>
         </AnimatePresence>
 
-        {/* Indicadores Visuais (Barrinhas) */}
+        {/* Indicadores visuais (barrinhas) */}
         <div className="absolute bottom-6 right-12 flex gap-2 z-30">
-          {movies.map((_, idx) => (
+          {bannerItems.map((_, idx) => (
             <button
               key={idx}
               onClick={() => setCurrentIndex(idx)}
@@ -272,6 +354,15 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
             />
           ))}
         </div>
+
+        {/* Indicador de estado (Poster / Trailer) */}
+        {showTrailer && trailerKey && (
+          <div className="absolute top-6 right-12 z-30">
+            <span className="bg-red-600/80 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider animate-pulse">
+              ▶ Trailer
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -13,32 +13,22 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 /* ---------- Helpers para env ---------- */
 const readEnv = (names: string[]): string | undefined => {
-  // Next.js exposes public vars as NEXT_PUBLIC_*
-  if (typeof process !== 'undefined' && process.env) {
-    for (const n of names) {
-      if (process.env[n]) return process.env[n];
-    }
-  }
-
-  // Vite exposes import.meta.env
+  // Vite expõe apenas VITE_* no client-side via import.meta.env
   if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
     for (const n of names) {
       if ((import.meta as any).env[n]) return (import.meta as any).env[n];
     }
   }
-
   return undefined;
 };
 
-const supabaseUrl = readEnv(['NEXT_PUBLIC_SUPABASE_URL', 'VITE_SUPABASE_URL', 'SUPABASE_URL']);
-const supabaseAnonKey = readEnv(['NEXT_PUBLIC_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY']);
+const supabaseUrl = readEnv(['VITE_SUPABASE_URL']);
+const supabaseAnonKey = readEnv(['VITE_SUPABASE_ANON_KEY']);
 
 /* ---------- Validations ---------- */
 if (!supabaseUrl || !supabaseAnonKey) {
-  // Throw early so imports fail loudly and developer notices missing envs.
-  // Prefer throwing so SSR/SSG doesn't continue with invalid client causing 500s obscurely.
   throw new Error(
-    'Supabase: variáveis de ambiente ausentes. Defina NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (ou VITE_SUPABASE_*) no seu .env.\n' +
+    'Supabase: variáveis de ambiente ausentes. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no seu .env\n' +
     `Encontradas: SUPABASE_URL=${Boolean(supabaseUrl)}, SUPABASE_ANON_KEY=${Boolean(supabaseAnonKey)}`
   );
 }
@@ -70,7 +60,7 @@ export const supabase = getSupabaseClient();
 /* ---------- Interfaces (mantidas) ---------- */
 // (Colei suas interfaces sem alteração para brevidade)
 export interface Movie { id: string; tmdb_id?: number; title: string; description?: string; poster?: string; backdrop?: string; logo_url?: string; year?: number; rating?: number; genre?: string[]; stream_url?: string; trailer_url?: string; use_trailer?: boolean; platform?: string; status?: 'published' | 'draft'; created_at?: string; }
-export interface Series { id: string; tmdb_id?: number; title: string; description?: string; poster?: string; backdrop?: string; logo_url?: string; year?: number; rating?: number; genre?: string[]; trailer_url?: string; use_trailer?: boolean; platform?: string; status?: 'published' | 'draft'; seasons_count?: number; created_at?: string; }
+export interface Series { id: string; tmdb_id?: number; title: string; description?: string; poster?: string; backdrop?: string; logo_url?: string; year?: number; rating?: number; genre?: string[]; stream_url?: string; trailer_url?: string; use_trailer?: boolean; platform?: string; status?: 'published' | 'draft'; seasons_count?: number; created_at?: string; }
 export interface Channel { id: string; nome: string; logo?: string; genero?: string; url: string; }
 export interface Season { id: string; series_id: string; season_number: number; title?: string; description?: string; poster?: string; }
 export interface Episode { id: string; season_id: string; episode_number: number; title: string; description?: string; duration?: string; stream_url?: string; thumbnail?: string; }
@@ -79,7 +69,7 @@ export interface Plan { id: string; name: string; price: number; description: st
 export interface Subscription { id: string; plan_id: string; status: string; current_period_end: string; plan?: Plan; }
 export interface PaymentMethod { id: string; card_brand: string; last_four: string; expiry_month: string; expiry_year: string; card_holder: string; is_default: boolean; }
 export interface Device { id: string; user_id?: string; name: string; type: string; icon: string; last_active: string; is_current_session: boolean; }
-export interface UserProfileDB { id: string; user_id?: string; name: string; avatar_url?: string; avatar_color?: string; is_kids: boolean; is_main?: boolean; }
+export interface UserProfileDB { id: string; user_id?: string; name: string; avatar_url?: string; avatar_color?: string; is_kids: boolean; is_main?: boolean; parental_rating?: string; parental_pin?: string; parental_enabled?: boolean; auto_play_next?: boolean; maturity_level?: number; }
 export interface PaymentSettings { id: string; pix_key: string; pix_name: string; bank_name?: string; bank_agency?: string; bank_account?: string; crypto_wallet?: string; instructions?: string; }
 export interface MediaImageUpdate { id?: string; media_id: string; media_type: 'movie' | 'series'; image_type: 'poster' | 'backdrop' | 'logo'; file_name: string; storage_url?: string; status: 'atualizado' | 'nao_encontrado' | 'upload_erro' | 'update_erro'; created_at?: string; }
 export interface AppConfig { id: string; logo_url: string; primary_color: string; secondary_color: string; background_color: string; }
@@ -215,8 +205,41 @@ export async function addUserProfile(profile: Partial<UserProfileDB>): Promise<U
   return data;
 }
 
+// Colunas válidas no banco (evita erro de coluna inexistente)
+const MOVIE_COLS = new Set(['title', 'description', 'poster', 'backdrop', 'logo_url', 'stream_url', 'year', 'genre', 'rating', 'duration', 'tmdb_id', 'stars', 'trailer_key', 'status', 'original_title']);
+const SERIES_COLS = new Set(['title', 'description', 'poster', 'backdrop', 'logo_url', 'stream_url', 'year', 'genre', 'rating', 'seasons', 'tmdb_id', 'stars', 'trailer_key', 'status', 'original_title']);
+
+function stripUnknownCols(data: Record<string, any>, validCols: Set<string>): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [key, val] of Object.entries(data)) {
+    if (validCols.has(key) && val !== undefined && val !== '') clean[key] = val;
+  }
+  return clean;
+}
+
+export async function insertMovie(movie: Partial<Movie>): Promise<Movie | null> {
+  const sanitized = stripUnknownCols(movie as any, MOVIE_COLS);
+  const { data, error } = await supabase.from('movies').insert(sanitized).select().maybeSingle();
+  if (error) {
+    console.error('Erro ao inserir filme:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function insertSeries(series: Partial<Series>): Promise<Series | null> {
+  const sanitized = stripUnknownCols(series as any, SERIES_COLS);
+  const { data, error } = await supabase.from('series').insert(sanitized).select().maybeSingle();
+  if (error) {
+    console.error('Erro ao inserir série:', error);
+    return null;
+  }
+  return data;
+}
+
 export async function updateMovie(id: string, updates: Partial<Movie>): Promise<Movie | null> {
-  const { data, error } = await supabase.from('movies').update(updates).eq('id', id).select().maybeSingle();
+  const sanitized = stripUnknownCols(updates as any, MOVIE_COLS);
+  const { data, error } = await supabase.from('movies').update(sanitized).eq('id', id).select().maybeSingle();
   if (error) {
     console.error('Erro ao atualizar filme:', error);
     return null;
@@ -225,7 +248,8 @@ export async function updateMovie(id: string, updates: Partial<Movie>): Promise<
 }
 
 export async function updateSeries(id: string, updates: Partial<Series>): Promise<Series | null> {
-  const { data, error } = await supabase.from('series').update(updates).eq('id', id).select().maybeSingle();
+  const sanitized = stripUnknownCols(updates as any, SERIES_COLS);
+  const { data, error } = await supabase.from('series').update(sanitized).eq('id', id).select().maybeSingle();
   if (error) {
     console.error('Erro ao atualizar série:', error);
     return null;
@@ -391,6 +415,8 @@ export default {
   removeDevice,
   getUserProfiles,
   addUserProfile,
+  insertMovie,
+  insertSeries,
   updateMovie,
   updateSeries,
   deleteMovie,
@@ -406,43 +432,185 @@ export default {
 
   // Batch Operations
   bulkInsertMovies: async (movies: Partial<Movie>[]) => {
-    // Upsert by tmdb_id to avoid duplicates
-    const { data, error } = await supabase.from('movies').upsert(movies, { onConflict: 'tmdb_id', ignoreDuplicates: true }).select();
+    const sanitized = movies.map(m => stripUnknownCols(m as any, MOVIE_COLS));
+    const { data, error } = await supabase.from('movies').upsert(sanitized, { onConflict: 'tmdb_id', ignoreDuplicates: true }).select();
     if (error) console.error('Bulk Insert Movies Error:', error);
     return { data, error };
   },
 
   bulkInsertSeries: async (series: Partial<Series>[]) => {
-    const { data, error } = await supabase.from('series').upsert(series, { onConflict: 'tmdb_id', ignoreDuplicates: true }).select();
+    const sanitized = series.map(s => stripUnknownCols(s as any, SERIES_COLS));
+    const { data, error } = await supabase.from('series').upsert(sanitized, { onConflict: 'tmdb_id', ignoreDuplicates: true }).select();
     if (error) console.error('Bulk Insert Series Error:', error);
     return { data, error };
   },
 
   batchDeleteContent: async (type: 'movie' | 'series' | 'all', year?: number, yearRange?: { min: number, max: number }) => {
     const tables = type === 'all' ? ['movies', 'series'] : [type === 'movie' ? 'movies' : 'series'];
-    let deletedCount = 0;
+    let totalDeleted = 0;
 
     for (const table of tables) {
       let query = supabase.from(table).delete();
 
-      // Safety: If no filters, require an explicit 'ALL' confirm flag (not implemented here, be careful)
-      // We will rely on UI confirmations. 
-      // Filter by year if provided
       if (year) {
         query = query.eq('year', year);
       } else if (yearRange) {
         query = query.gte('year', yearRange.min).lte('year', yearRange.max);
       } else {
-        // If deleting EVERYTHING from table
-        query = query.neq('id', '00000000-0000-0000-0000-000000000000'); // Hack to select all rows if no other filter
+        // Deletar tudo: usar filtro que matcha todos os registros
+        query = query.neq('id', '00000000-0000-0000-0000-000000000000');
       }
 
-      const { count, error } = await query.select('*', { count: 'exact', head: true }); // Just get count logic handled by delete actually returning data? no delete returns null count usually unless select used.
-      // Actually delete doesn't return count easily in all localized versions.
-      // Let's just execute.
-      const { error: delError } = await query;
-      if (delError) console.error(`Error deleting from ${table}:`, delError);
+      const { error } = await query;
+      if (error) {
+        console.error(`Erro ao deletar de ${table}:`, error);
+      }
     }
     return true;
   }
 };
+
+// ========== PAGINAÇÃO E FILTROS ==========
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface CatalogFilters {
+  minYear?: number;
+  maxYear?: number;
+  genres?: string[];
+  contentType?: 'movies' | 'series' | 'mixed';
+}
+
+export async function getMoviesPaginated(
+  page = 1,
+  limit = 50,
+  filters?: CatalogFilters
+): Promise<PaginatedResponse<Movie>> {
+  let query = supabase
+    .from('movies')
+    .select('*', { count: 'exact' })
+    .or('status.eq.published,status.is.null');
+
+  // Aplicar filtros — ano mínimo 2018 (incluindo itens sem ano)
+  if (filters?.minYear) {
+    query = query.or(`year.gte.${filters.minYear},year.is.null`);
+  }
+  if (filters?.maxYear) {
+    query = query.lte('year', filters.maxYear);
+  }
+  if (filters?.genres && filters.genres.length > 0) {
+    query = query.overlaps('genre', filters.genres);
+  }
+
+  // Paginação
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  query = query
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) throw error;
+
+  const total = count || 0;
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    data: data || [],
+    total,
+    page,
+    limit,
+    totalPages
+  };
+}
+
+export async function getSeriesPaginated(
+  page = 1,
+  limit = 50,
+  filters?: CatalogFilters
+): Promise<PaginatedResponse<Series>> {
+  let query = supabase
+    .from('series')
+    .select('*', { count: 'exact' })
+    .or('status.eq.published,status.is.null');
+
+  // Aplicar filtros — ano mínimo 2018 (incluindo itens sem ano)
+  if (filters?.minYear) {
+    query = query.or(`year.gte.${filters.minYear},year.is.null`);
+  }
+  if (filters?.maxYear) {
+    query = query.lte('year', filters.maxYear);
+  }
+  if (filters?.genres && filters.genres.length > 0) {
+    query = query.overlaps('genre', filters.genres);
+  }
+
+  // Paginação
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  query = query
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) throw error;
+
+  const total = count || 0;
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    data: data || [],
+    total,
+    page,
+    limit,
+    totalPages
+  };
+}
+
+export async function getCatalogWithFilters(
+  filters?: CatalogFilters
+): Promise<{ movies: Movie[]; series: Series[] }> {
+  // Carregar TODO conteúdo desde 2018 (sem limite baixo)
+  const effectiveFilters = {
+    ...filters,
+    minYear: filters?.minYear || 2018,
+  };
+
+  // Primeira chamada para saber o total
+  const [moviesPage1, seriesPage1] = await Promise.all([
+    getMoviesPaginated(1, 1000, effectiveFilters),
+    getSeriesPaginated(1, 1000, effectiveFilters)
+  ]);
+
+  let allMovies = moviesPage1.data;
+  let allSeries = seriesPage1.data;
+
+  // Se houver mais páginas, carrega tudo
+  if (moviesPage1.totalPages > 1) {
+    const moviePages = Array.from({ length: moviesPage1.totalPages - 1 }, (_, i) => i + 2);
+    const moreMovies = await Promise.all(moviePages.map(p => getMoviesPaginated(p, 1000, effectiveFilters)));
+    moreMovies.forEach(r => { allMovies = [...allMovies, ...r.data]; });
+  }
+  if (seriesPage1.totalPages > 1) {
+    const seriesPages = Array.from({ length: seriesPage1.totalPages - 1 }, (_, i) => i + 2);
+    const moreSeries = await Promise.all(seriesPages.map(p => getSeriesPaginated(p, 1000, effectiveFilters)));
+    moreSeries.forEach(r => { allSeries = [...allSeries, ...r.data]; });
+  }
+
+  console.log(`📦 Catálogo carregado: ${allMovies.length} filmes, ${allSeries.length} séries (desde ${effectiveFilters.minYear})`);
+
+  return {
+    movies: allMovies,
+    series: allSeries
+  };
+}

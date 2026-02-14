@@ -78,7 +78,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           {/* User Profile */}
           <div className="p-4 border-t border-white/5">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-600 to-red-900 flex items-center justify-center font-bold text-sm">
+              <div className="w-10 h-10 rounded-full bg-linear-to-br from-red-600 to-red-900 flex items-center justify-center font-bold text-sm">
                 AD
               </div>
               <div className="flex-1 min-w-0">

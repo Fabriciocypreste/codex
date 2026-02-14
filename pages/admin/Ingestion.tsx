@@ -229,20 +229,28 @@ const Ingestion: React.FC = () => {
         setManualInsertLog('⏳ Processando...');
 
         try {
-            const dataToInsert = {
+            const parsedTmdbId = manualForm.tmdb_id ? parseInt(manualForm.tmdb_id) : null;
+            const dataToInsert: Record<string, any> = {
                 title: manualForm.title.trim(),
                 description: manualForm.description || null,
                 stream_url: manualForm.stream_url.trim(),
                 year: manualForm.year || new Date().getFullYear(),
-                genre: [manualForm.genre] || ['Drama'],
-                poster: manualForm.poster || '',
-                backdrop: manualForm.backdrop || '',
+                genre: manualForm.genre ? [manualForm.genre] : ['Drama'],
+                poster: manualForm.poster || null,
+                backdrop: manualForm.backdrop || null,
                 rating: manualForm.rating || '7.0',
-                ...(manualForm.tmdb_id && { tmdb_id: parseInt(manualForm.tmdb_id) || null }),
-                ...(manualType === 'movie' && { duration: manualForm.duration || null }),
-                ...(manualType === 'series' && { seasons: manualForm.seasons || 1 }),
-                status: 'published'
             };
+
+            // Campos opcionais
+            if (parsedTmdbId && !isNaN(parsedTmdbId)) {
+                dataToInsert.tmdb_id = parsedTmdbId;
+            }
+            if (manualType === 'movie') {
+                dataToInsert.duration = manualForm.duration || null;
+            }
+            if (manualType === 'series') {
+                dataToInsert.seasons = manualForm.seasons || 1;
+            }
 
             const table = manualType === 'movie' ? 'movies' : 'series';
             const { data, error } = await supabase
@@ -284,7 +292,7 @@ const Ingestion: React.FC = () => {
         <AdminLayout>
             <div className="p-8 max-w-6xl mx-auto space-y-8">
                 <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">Gestão de Conteúdo</h1>
+                    <h1 className="text-3xl font-bold bg-linear-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">Gestão de Conteúdo</h1>
                     <p className="text-white/60 mt-1">Ferramentas de Importação em Massa e Limpeza de Banco de Dados.</p>
                 </div>
 
@@ -571,7 +579,7 @@ const Ingestion: React.FC = () => {
                         </div>
 
                         {/* Logs Console */}
-                        <div className="bg-[#0b0b0f] border border-white/10 rounded-2xl p-6 flex flex-col h-[500px]">
+                        <div className="bg-[#0b0b0f] border border-white/10 rounded-2xl p-6 flex flex-col h-125">
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="font-bold text-white/60 font-mono text-xs uppercase">Terminal de Execução</h4>
                                 <span className="text-green-500 font-mono text-xs">{importProgress.added} itens adicionados</span>

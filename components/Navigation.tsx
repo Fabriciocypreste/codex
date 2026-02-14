@@ -15,6 +15,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate, profil
     { id: Page.HOME, label: 'Início' },
     { id: Page.MOVIES, label: 'Filmes' },
     { id: Page.SERIES, label: 'Séries' },
+    { id: Page.KIDS, label: 'Kids' },
     { id: Page.LIVE, label: 'TV ao vivo' },
     { id: Page.MY_LIST, label: 'Minha Lista' },
   ];

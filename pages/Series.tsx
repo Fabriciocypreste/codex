@@ -6,6 +6,7 @@ import { Search, Tv } from 'lucide-react';
 import StreamingPlatforms, { platforms } from '../components/StreamingPlatforms';
 import MediaRow from '../components/MediaRow';
 import { playSelectSound } from '../utils/soundEffects';
+import { getAllSeries } from '../services/supabaseService';
 
 interface SeriesProps {
   series: Media[];
@@ -20,6 +21,8 @@ const COLS_PER_ROW = 6;
 const Series: React.FC<SeriesProps> = ({ series, seriesByGenre, trendingSeries, onSelectMedia, onPlayMedia }) => {
   const [featured, setFeatured] = useState<Media | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
+  const [localSeries, setLocalSeries] = useState<Media[] | null>(null);
+  const [localSeriesByGenre, setLocalSeriesByGenre] = useState<Map<string, Media[]>>(new Map());
 
   useEffect(() => {
     if (trendingSeries.length > 0) {
@@ -28,9 +31,35 @@ const Series: React.FC<SeriesProps> = ({ series, seriesByGenre, trendingSeries, 
     }
   }, [trendingSeries]);
 
+  // Fallback: se não houver series vindas do App, buscar direto do Supabase (útil para teste)
+  useEffect(() => {
+    if ((series?.length || 0) === 0 && localSeries === null) {
+      (async () => {
+        try {
+          const dbSeries = await getAllSeries();
+          const typed = dbSeries.map(s => ({ ...s, type: 'series' } as Media));
+          setLocalSeries(typed);
+          const map = new Map<string, Media[]>();
+          typed.forEach(item => {
+            const g = Array.isArray(item.genre) && item.genre.length > 0 ? item.genre[0] : 'Outros';
+            if (!map.has(g)) map.set(g, []);
+            map.get(g)!.push(item);
+          });
+          setLocalSeriesByGenre(map);
+        } catch (e) {
+          console.error('Fallback getAllSeries failed', e);
+          setLocalSeries([]);
+        }
+      })();
+    }
+  }, [series, localSeries]);
+
+  const effectiveSeries = (series && series.length > 0) ? series : (localSeries || []);
+  const effectiveSeriesByGenre = (seriesByGenre && seriesByGenre.size > 0) ? seriesByGenre : localSeriesByGenre;
+
   const filteredSeries = useMemo(() => filter
-    ? series.filter(s => s.title.toLowerCase().includes(filter.toLowerCase()))
-    : null, [series, filter]);
+    ? effectiveSeries.filter(s => s.title.toLowerCase().includes(filter.toLowerCase()))
+    : null, [effectiveSeries, filter]);
 
   const handleSelect = useCallback((m: Media) => onSelectMedia(m), [onSelectMedia]);
 
@@ -47,7 +76,7 @@ const Series: React.FC<SeriesProps> = ({ series, seriesByGenre, trendingSeries, 
       {/* Hero Banner (Only shown if no filter) */}
       {!filter && (
         <div className="mt-0 relative z-0">
-          <HeroBanner mediaType="tv" onPlayMedia={onPlayMedia} onSelectMedia={onSelectMedia} dbMedia={series} />
+          <HeroBanner mediaType="tv" onPlayMedia={onPlayMedia} onSelectMedia={onSelectMedia} dbMedia={effectiveSeries} />
         </div>
       )}
 
@@ -173,7 +202,7 @@ const Series: React.FC<SeriesProps> = ({ series, seriesByGenre, trendingSeries, 
               />
             )}
 
-            {Array.from(seriesByGenre.entries()).map(([genre, items], idx) => (
+            {Array.from(effectiveSeriesByGenre.entries()).map(([genre, items], idx) => (
               <MediaRow
                 key={genre}
                 title={genre}

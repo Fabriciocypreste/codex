@@ -2,32 +2,40 @@ import { supabase } from './supabaseService';
 
 // ══════════════════════════════════════════════════
 // Cache de autenticação — evita chamar getUser() a cada card
+// Com TTL de 5 minutos para evitar cache stale
 // ══════════════════════════════════════════════════
 let cachedUserId: string | null = null;
 let authCheckPromise: Promise<string | null> | null = null;
+let cacheTimestamp = 0;
+const AUTH_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 async function getAuthUserId(): Promise<string | null> {
-  if (cachedUserId) return cachedUserId;
+  const now = Date.now();
+  if (cachedUserId && (now - cacheTimestamp) < AUTH_CACHE_TTL) return cachedUserId;
   if (authCheckPromise) return authCheckPromise;
 
   authCheckPromise = supabase.auth.getUser()
     .then(({ data }) => {
       cachedUserId = data?.user?.id || null;
+      cacheTimestamp = Date.now();
       authCheckPromise = null;
       return cachedUserId;
     })
     .catch(() => {
       authCheckPromise = null;
+      cachedUserId = null;
+      cacheTimestamp = 0;
       return null;
     });
 
   return authCheckPromise;
 }
 
-// Limpar cache quando auth muda
+// Limpar cache quando auth muda (logout, login, token refresh)
 supabase.auth.onAuthStateChange(() => {
   cachedUserId = null;
   authCheckPromise = null;
+  cacheTimestamp = 0;
 });
 
 // Flag para saber se as tabelas existem (evita spam de erros)

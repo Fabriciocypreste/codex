@@ -113,7 +113,7 @@ const Login: React.FC<{ onLogin: () => void; onAdminAccess?: () => void }> = ({ 
                 if (e.key === 'ArrowUp') { e.preventDefault(); setPosition(0, 1); }
                 if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLButtonElement).click(); }
               }}
-              className="w-full bg-gradient-to-r from-[#E50914] to-[#b20710] py-3 rounded-2xl font-bold flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-red-900/20 group"
+              className="w-full bg-linear-to-r from-[#E50914] to-[#b20710] py-3 rounded-2xl font-bold flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-red-900/20 group"
               data-nav-item
               data-nav-col="2"
             >

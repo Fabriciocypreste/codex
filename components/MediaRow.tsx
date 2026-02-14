@@ -60,7 +60,7 @@ const MediaRow: React.FC<MediaRowProps> = React.memo(({ title, items, onSelect, 
         <section ref={sectionRef} data-nav-row={rowIndex} className="px-12 relative group mt-8">
             <h2 className="text-2xl font-bold mb-8 flex items-center gap-4">
                 {title}
-                <div className="h-px flex-1 bg-gradient-to-r from-white/20 to-transparent" />
+                <div className="h-px flex-1 bg-linear-to-r from-white/20 to-transparent" />
             </h2>
 
             <div className="relative">

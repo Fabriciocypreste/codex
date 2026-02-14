@@ -23,6 +23,8 @@ export interface Media {
   stars?: string[];
   director?: string;
   seasons?: number;
+  trailer_key?: string;
+  group_title?: string;
 }
 
 export interface Channel {
@@ -36,8 +38,15 @@ export interface UserProfile {
   id: string;
   name: string;
   avatar?: string;
+  avatarColor?: string;
   isKids: boolean;
   language?: string;
+  // Controle Parental
+  parentalRating?: string; // L, 10+, 12+, 14+, 16+, 18+
+  parentalPin?: string; // PIN de 4 dígitos
+  parentalEnabled?: boolean;
+  autoPlayNext?: boolean;
+  maturityLevel?: number; // 0=L, 10, 12, 14, 16, 18
 }
 
 export enum Page {

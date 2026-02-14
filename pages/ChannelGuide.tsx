@@ -141,14 +141,14 @@ const ChannelGuide: React.FC<ChannelGuideProps> = ({ channels, onBack, onSelectC
   return (
     <div className="fixed inset-0 z-[9999] bg-black/[0.93] backdrop-blur-2xl flex flex-col animate-in fade-in duration-300">
       {/* ═══ HEADER ═══ */}
-      <div className="shrink-0 flex items-center justify-between px-6 h-14 border-b border-white/[0.06] bg-gradient-to-r from-white/[0.03] to-transparent">
+      <div className="shrink-0 flex items-center justify-between px-6 h-14 border-b border-white/[0.06] bg-linear-to-r from-white/[0.03] to-transparent">
         <div className="flex items-center gap-4">
           <button onClick={() => { playBackSound(); onBack(); }} className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/[0.1] flex items-center justify-center text-white/50 hover:bg-white/[0.12] hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-[#E50914]">
             <ArrowLeft size={16} />
           </button>
           <div>
-            <h1 className="text-sm font-black italic tracking-tight uppercase text-white">
-              Guia de Programação
+            <h1 className="text-sm font-black italic tracking-tight uppercase">
+              <span className="text-white">Guia de</span> <span className="text-[#E50914]">Programação</span>
             </h1>
             <p className="text-[8px] text-white/25 font-bold uppercase tracking-widest">
               {epgChannels.length} canais • {now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -282,7 +282,7 @@ const ChannelGuide: React.FC<ChannelGuideProps> = ({ channels, onBack, onSelectC
       {/* ═══ PROGRAMME DETAIL POPUP ═══ */}
       {selectedProg && (
         <div className="absolute inset-0 z-50 flex items-end justify-center pb-8 pointer-events-none">
-          <div className="pointer-events-auto max-w-lg w-full mx-4 bg-gradient-to-br from-white/[0.1] to-white/[0.04] backdrop-blur-2xl rounded-2xl border border-white/[0.15] p-5 space-y-3 shadow-[0_8px_60px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.08)] animate-in slide-in-from-bottom-4 duration-300">
+          <div className="pointer-events-auto max-w-lg w-full mx-4 bg-linear-to-br from-white/[0.1] to-white/[0.04] backdrop-blur-2xl rounded-2xl border border-white/[0.15] p-5 space-y-3 shadow-[0_8px_60px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.08)] animate-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg p-1 bg-white/[0.06] border border-white/[0.1] flex items-center justify-center">

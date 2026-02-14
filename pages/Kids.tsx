@@ -6,9 +6,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { fetchDetails } from '../services/tmdb';
 import MediaRow from '../components/MediaRow';
 import { playSelectSound } from '../utils/soundEffects';
+import { getAllMovies, getAllSeries } from '../services/supabaseService';
 
 interface KidsProps {
   movies: Media[];
+  series?: Media[];
   onSelectMedia: (media: Media) => void;
   onPlayMedia?: (media: Media) => void;
 }
@@ -43,7 +45,7 @@ const floatingItems = [
 ];
 
 // ─── Main Kids Page ──────────────────────────────────────────────
-const Kids: React.FC<KidsProps> = ({ movies, onSelectMedia, onPlayMedia }) => {
+const Kids: React.FC<KidsProps> = ({ movies, series = [], onSelectMedia, onPlayMedia }) => {
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroLogo, setHeroLogo] = useState<string | null>(null);
   const [showTrailer, setShowTrailer] = useState(false);
@@ -51,16 +53,47 @@ const Kids: React.FC<KidsProps> = ({ movies, onSelectMedia, onPlayMedia }) => {
   const [isMuted, setIsMuted] = useState(true);
   const timeoutRef = useRef<number | null>(null);
 
-  // Filtrar conteúdo kids-friendly (animação, família, comédia, aventura, fantasia)
-  const kidsGenres = useMemo(() => ['Animação', 'Animation', 'Família', 'Family', 'Comédia', 'Comedy', 'Kids', 'Aventura', 'Adventure', 'Fantasia', 'Fantasy'], []);
+  // Combinar filmes e séries
+  const [localMovies, setLocalMovies] = useState<Media[] | null>(null);
+  const [localSeries, setLocalSeries] = useState<Media[] | null>(null);
+
+  useEffect(() => {
+    if ((movies?.length || 0) === 0 && localMovies === null) {
+      (async () => {
+        try {
+          const db = await getAllMovies();
+          setLocalMovies(db.map(m => ({ ...m, type: 'movie' } as Media)));
+        } catch (e) {
+          console.error('Kids fallback getAllMovies failed', e);
+          setLocalMovies([]);
+        }
+      })();
+    }
+    if ((series?.length || 0) === 0 && localSeries === null) {
+      (async () => {
+        try {
+          const db = await getAllSeries();
+          setLocalSeries(db.map(s => ({ ...s, type: 'series' } as Media)));
+        } catch (e) {
+          console.error('Kids fallback getAllSeries failed', e);
+          setLocalSeries([]);
+        }
+      })();
+    }
+  }, [movies, series, localMovies, localSeries]);
+
+  const allContent = useMemo(() => [...(movies && movies.length > 0 ? movies : (localMovies || [])), ...(series && series.length > 0 ? series : (localSeries || []))], [movies, series, localMovies, localSeries]);
+
+  // Filtrar conteúdo kids-friendly (animação, família, comédia, aventura, fantasia, infantil)
+  const kidsGenres = useMemo(() => ['Animação', 'Animation', 'Família', 'Family', 'Comédia', 'Comedy', 'Kids', 'Aventura', 'Adventure', 'Fantasia', 'Fantasy', 'Infantil'], []);
   
   const kidsContent = useMemo(() => {
-    const filtered = movies.filter(m => {
+    const filtered = allContent.filter(m => {
       if (!m.genre || !Array.isArray(m.genre)) return false;
       return m.genre.some(g => kidsGenres.some(kg => g.toLowerCase().includes(kg.toLowerCase())));
     });
-    return filtered.length > 0 ? filtered : movies.slice(0, 50);
-  }, [movies, kidsGenres]);
+    return filtered.length > 0 ? filtered : allContent.slice(0, 50);
+  }, [allContent, kidsGenres]);
 
   const kidsMovies = useMemo(() => kidsContent.filter(m => m.type === 'movie'), [kidsContent]);
   const kidsSeries = useMemo(() => kidsContent.filter(m => m.type === 'series'), [kidsContent]);
@@ -175,8 +208,8 @@ const Kids: React.FC<KidsProps> = ({ movies, onSelectMedia, onPlayMedia }) => {
                     )}
 
                     {/* Gradients */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-transparent" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-linear-to-r from-black/70 via-black/35 to-transparent" />
+                    <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-transparent" />
                     {/* visionOS inner ring */}
                     <div className="absolute inset-0 rounded-[2.5rem] ring-1 ring-inset ring-white/[0.08] pointer-events-none" />
                   </div>

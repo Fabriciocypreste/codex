@@ -56,10 +56,18 @@ const Home: React.FC<HomeProps> = ({
   const handleSelectMedia = useCallback((m: Media) => onSelectMedia(m), [onSelectMedia]);
 
   // Row index counter for D-Pad navigation
+  const RECENTLY_ADDED_ROW = 2;
   const TRENDING_MOVIES_ROW = 3;
   const movieGenreStartRow = TRENDING_MOVIES_ROW + 1;
   const TRENDING_SERIES_ROW = movieGenreStartRow + movieGenreEntries.length;
   const seriesGenreStartRow = TRENDING_SERIES_ROW + 1;
+
+  // Recém adicionados: últimos 20 itens com stream_url (prioridade para conteúdo manual)
+  const recentlyAdded = useMemo(() => {
+    return [...movies, ...series]
+      .filter(m => m.stream_url)
+      .slice(0, 20);
+  }, [movies, series]);
 
   return (
     <div className="w-full space-y-4 pb-20 animate-fade-in relative">
@@ -126,6 +134,17 @@ const Home: React.FC<HomeProps> = ({
         {/* Catálogo Real do Banco de Dados - organizado por gênero */}
         {!filter && (
           <>
+            {/* Recém Adicionados - conteúdo com stream_url (inserido via admin) */}
+            {recentlyAdded.length > 0 && (
+              <MediaRow
+                title="⭐ Recém Adicionados"
+                items={recentlyAdded}
+                onSelect={handleSelectMedia}
+                onPlay={onPlayMedia}
+                rowIndex={RECENTLY_ADDED_ROW}
+              />
+            )}
+
             {/* Trending TMDB */}
             {trendingMovies.length > 0 && (
               <MediaRow

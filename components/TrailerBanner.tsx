@@ -72,7 +72,7 @@ const TrailerBanner: React.FC<TrailerBannerProps> = ({ media, onSelect, title })
       )}
 
       {/* Gradient Mask */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-90 z-10" />
+      <div className="absolute inset-0 bg-linear-to-t from-black via-black/30 to-transparent opacity-90 z-10" />
 
       <div className="relative z-20 flex flex-col justify-end h-full w-full max-w-full px-0 pb-32 md:pb-40" data-nav-row={1}>
         <div className="mb-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full glass border-white/20 text-[8px] font-bold uppercase tracking-widest">

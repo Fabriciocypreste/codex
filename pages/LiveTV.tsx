@@ -28,13 +28,13 @@ const useFocusable = () => ({
 const CATEGORIES = [
   { id: 'all', name: 'Todos', icon: <LayoutGrid /> },
   { id: 'abertos', name: 'TV Aberta', icon: <Tv />, match: ['abertos', 'tv aberta', 'aberto'] },
-  { id: 'esportes', name: 'Esportes', icon: <Trophy />, match: ['esportes', 'esporte', 'sport', 'sports'] },
+  { id: 'esportes', name: 'Esportes', icon: <Trophy />, match: ['esportes', 'esporte', 'sport', 'sports', 'ppv'] },
   { id: 'filmes', name: 'Filmes e Séries', icon: <Film />, match: ['filmes', 'series', 'filme', 'serie'] },
-  { id: 'noticias', name: 'Notícias', icon: <Newspaper />, match: ['noticias', 'noticia', 'news'] },
-  { id: 'variedades', name: 'Variedades', icon: <Star />, match: ['variedades', 'variedade'] },
+  { id: 'noticias', name: 'Notícias', icon: <Newspaper />, match: ['noticias', 'noticia', 'news', 'jornalismo'] },
+  { id: 'variedades', name: 'Variedades', icon: <Star />, match: ['variedades', 'variedade', 'entretenimento'] },
   { id: '24h', name: '24h', icon: <Clock />, match: ['24h', '24hs', '24 horas'] },
   { id: 'docs', name: 'Documentários', icon: <BookOpen />, match: ['documentarios', 'documentario', 'docs', 'discovery'] },
-  { id: 'infantil', name: 'Infantil', icon: <Baby />, match: ['infantil', 'kids', 'infantis', 'desenhos'] },
+  { id: 'infantil', name: 'Infantil', icon: <Baby />, match: ['infantil', 'kids', 'infantis', 'desenhos', 'crianca'] },
   { id: 'musica', name: 'Música', icon: <Music />, match: ['musica', 'music', 'clips', 'clipe'] },
   { id: 'religiosos', name: 'Religiosos', icon: <Heart />, match: ['religiosos', 'religiao', 'igreja', 'gospel'] },
   { id: 'globo', name: 'Globo', icon: <Globe />, match: ['globo'] },
@@ -55,15 +55,15 @@ const SidebarItem: React.FC<{
     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onClick?.(); } }}
     tabIndex={0}
     className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg mx-1 transition-all duration-300 group relative outline-none focus:ring-2 focus:ring-[#E50914]
-      ${active || focused ? 'bg-white/[0.1] text-white backdrop-blur-xl border border-white/[0.15] shadow-[0_4px_20px_rgba(0,0,0,0.3)]' : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04] border border-transparent focus:text-white/70 focus:bg-white/[0.04]'}`}
+      ${active || focused ? 'bg-[#E50914]/[0.15] text-white backdrop-blur-xl border border-[#E50914]/[0.3] shadow-[0_4px_20px_rgba(229,9,20,0.15)]' : 'text-[#C0C0C0]/60 hover:text-[#C0C0C0] hover:bg-white/[0.04] border border-transparent focus:text-[#C0C0C0] focus:bg-white/[0.04]'}`}
   >
-    <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4">{icon}</div>
+    <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 text-[#C0C0C0]">{icon}</div>
     <span className={`text-[9px] font-black uppercase tracking-[0.15em] transition-all duration-500 whitespace-nowrap
       ${expanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10 pointer-events-none'}`}>
       {label}
     </span>
     {active && !expanded && (
-      <div className="absolute left-0 w-[3px] h-5 bg-white/50 rounded-r-full shadow-[0_0_10px_rgba(255,255,255,0.2)]" />
+      <div className="absolute left-0 w-[3px] h-5 bg-[#E50914] rounded-r-full shadow-[0_0_10px_rgba(229,9,20,0.4)]" />
     )}
   </button>
 );
@@ -110,6 +110,19 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
   const listRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Filtrar categorias que realmente têm canais
+  const activeCategories = useMemo(() => {
+    if (channels.length === 0) return CATEGORIES;
+    return CATEGORIES.filter(cat => {
+      if (cat.id === 'all') return true;
+      if (cat.id === 'teste') return true; // sempre mostrar teste (hardcoded)
+      if (!cat.match) return true;
+      return channels.some(c =>
+        cat.match!.some(m => c.genero.toLowerCase().includes(m))
+      );
+    });
+  }, [channels]);
 
   // Auto-hide menu 2s após selecionar canal
   const scheduleHideMenu = useCallback(() => {
@@ -171,7 +184,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
     setFilteredChannels(result);
     setFocusedIndex(0);
-    setFocusedCategoryIndex(Math.max(0, CATEGORIES.findIndex((c) => c.id === activeCategoryId)));
+    setFocusedCategoryIndex(Math.max(0, activeCategories.findIndex((c) => c.id === activeCategoryId)));
   }, [activeCategoryId, searchQuery, channels]);
 
   // Navegação por teclado (TV Box) — throttle para não correr
@@ -222,7 +235,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           if (focusArea === 'channels') {
             setFocusedIndex(prev => Math.min(filteredChannels.length - 1, prev + 1));
           } else {
-            setFocusedCategoryIndex(prev => Math.min(CATEGORIES.length - 1, prev + 1));
+            setFocusedCategoryIndex(prev => Math.min(activeCategories.length - 1, prev + 1));
           }
           break;
         case 'Enter':
@@ -233,7 +246,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
               scheduleHideMenu();
             }
           } else {
-            const cat = CATEGORIES[focusedCategoryIndex];
+            const cat = activeCategories[focusedCategoryIndex];
             if (cat) {
               playSelectSound();
               setActiveCategoryId(cat.id);
@@ -327,7 +340,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                 </div>
               </>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/40" />
+            <div className="absolute inset-0 bg-linear-to-t from-black via-transparent to-black/40" />
           </div>
         ) : (
           <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
@@ -337,7 +350,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
         {/* Overlay para destaque quando o menu está aberto */}
         <div className={`absolute inset-0 bg-black/60 transition-opacity duration-1000 ${isMenuOpen ? 'opacity-100' : 'opacity-0'}`} />
-        <div className={`absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent transition-opacity duration-1000 ${isMenuOpen ? 'opacity-100' : 'opacity-0'}`} />
+        <div className={`absolute inset-0 bg-linear-to-r from-black/90 via-black/40 to-transparent transition-opacity duration-1000 ${isMenuOpen ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
       {/* INTERFACE DO USUÁRIO */}
@@ -351,7 +364,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         <div className="flex h-full">
         {/* 1. SIDEBAR */}
         <aside
-          className={`h-full bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-2xl border-r border-white/[0.08] flex flex-col py-4 transition-all duration-500 ease-in-out shadow-[4px_0_30px_rgba(0,0,0,0.3)]
+          className={`h-full bg-linear-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-2xl border-r border-white/[0.08] flex flex-col py-4 transition-all duration-500 ease-in-out shadow-[4px_0_30px_rgba(0,0,0,0.3)]
             ${isSidebarExpanded ? 'w-[200px]' : 'w-[60px]'}`}
           onMouseEnter={() => setIsSidebarExpanded(true)}
           onMouseLeave={() => setIsSidebarExpanded(false)}
@@ -370,7 +383,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           </div>
 
           <div className="flex-1 overflow-y-auto hide-scrollbar space-y-0.5 px-1">
-            {CATEGORIES.map((cat, idx) => (
+            {activeCategories.map((cat, idx) => (
               <SidebarItem
                 key={cat.id}
                 icon={cat.icon}
@@ -396,10 +409,10 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           <div className="p-4 pb-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <h2 className="text-lg font-black italic tracking-tighter uppercase text-white">Guia de <span className="text-white/40">Canais</span></h2>
+                <h2 className="text-lg font-black italic tracking-tighter uppercase text-white">Guia de <span className="text-[#E50914]">Canais</span></h2>
                 <div className="flex items-center gap-2 text-white/40 text-[8px] font-bold uppercase tracking-[0.3em]">
                   <div className="w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
-                  {CATEGORIES.find(c => c.id === activeCategoryId)?.name}
+                  {activeCategories.find(c => c.id === activeCategoryId)?.name || CATEGORIES.find(c => c.id === activeCategoryId)?.name}
                 </div>
               </div>
               <button
@@ -439,24 +452,33 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   if (e.key === 'Enter') { e.preventDefault(); playSelectSound(); setSelectedChannel(channel); scheduleHideMenu(); }
                 }}
                 onMouseEnter={() => setFocusedIndex(idx)}
-                className={`w-full group flex items-center gap-3 p-2 rounded-xl transition-all duration-300 relative focus:outline-none focus:ring-2 focus:ring-[#E50914]
+                className={`w-full group flex items-center gap-3 p-2.5 rounded-2xl transition-all duration-300 relative focus:outline-none focus:ring-2 focus:ring-[#E50914]
                   ${focusedIndex === idx
-                    ? 'bg-white/[0.12] text-white backdrop-blur-2xl border border-white/[0.2] shadow-[0_4px_30px_rgba(0,0,0,0.4)] scale-[1.02] z-10'
-                    : 'bg-white/[0.03] text-white/60 hover:bg-white/[0.07] border border-transparent'}`}
+                    ? 'backdrop-blur-2xl border border-white/[0.25] shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.12)] scale-[1.03] z-10'
+                    : 'backdrop-blur-xl border border-white/[0.08] hover:border-white/[0.15] shadow-[0_2px_12px_rgba(0,0,0,0.2)]'}`}
+                style={{
+                  background: focusedIndex === idx
+                    ? 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 50%, rgba(229,9,20,0.08) 100%)'
+                    : 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
+                }}
               >
-                <div className={`w-6 text-[8px] font-black text-center ${focusedIndex === idx ? 'text-white/60' : 'text-white/20'}`}>
+                {/* Highlight superior visionOS */}
+                <div className={`absolute top-0 left-4 right-4 h-[1px] rounded-full transition-opacity duration-300 ${focusedIndex === idx ? 'opacity-60' : 'opacity-20'}`}
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)' }} />
+                
+                <div className={`w-7 text-[9px] font-black text-center shrink-0 ${focusedIndex === idx ? 'text-[#E50914]' : 'text-[#E50914]/50'}`}>
                   {100 + idx + 1}
                 </div>
                 {/* Ícone de canal com efeito de vidro */}
-                <div className={`w-10 h-10 rounded-xl p-1.5 flex items-center justify-center shrink-0 transition-all duration-300 overflow-hidden
+                <div className={`w-11 h-11 rounded-xl p-1.5 flex items-center justify-center shrink-0 transition-all duration-300 overflow-hidden backdrop-blur-xl
                   ${focusedIndex === idx
-                    ? 'bg-gradient-to-br from-white/[0.15] to-white/[0.06] border border-white/[0.25] shadow-[0_4px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] scale-110'
-                    : 'bg-gradient-to-br from-white/[0.08] to-white/[0.03] border border-white/[0.1] shadow-[0_2px_8px_rgba(0,0,0,0.3)]'}`}
+                    ? 'bg-white/[0.15] border border-white/[0.3] shadow-[0_4px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] scale-110'
+                    : 'bg-white/[0.08] border border-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.3)]'}`}
                 >
-                  <img src={channel.logo} className="max-w-full max-h-full object-contain drop-shadow-[0_2px_8px_rgba(255,255,255,0.1)]" />
+                  <img src={channel.logo} className="max-w-full max-h-full object-contain drop-shadow-[0_2px_8px_rgba(255,255,255,0.15)]" />
                 </div>
                 <div className="flex-1 text-left overflow-hidden">
-                  <div className={`text-[11px] font-black uppercase tracking-tight truncate ${focusedIndex === idx ? 'text-white' : 'text-white/70'}`}>
+                  <div className={`text-[11px] font-black uppercase tracking-tight truncate ${focusedIndex === idx ? 'text-white' : 'text-white/80'}`}>
                     {channel.nome}
                   </div>
                   {(() => {
@@ -468,9 +490,9 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                             {prog.isLive && <span className="text-white/50 mr-1">●</span>}
                             {formatTime(prog.start)} {prog.title}
                           </div>
-                          <div className="w-full h-[2px] mt-0.5 rounded-full bg-white/[0.06] overflow-hidden">
+                          <div className="w-full h-[2px] mt-0.5 rounded-full bg-white/[0.08] overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-white/40 to-white/15 rounded-full transition-all duration-1000"
+                              className="h-full bg-linear-to-r from-[#E50914] to-[#E50914]/40 rounded-full transition-all duration-1000"
                               style={{ width: `${getProgrammeProgress(prog)}%` }}
                             />
                           </div>
@@ -496,7 +518,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         {/* 3. INFO DO CANAL (DIREITA) — centralizado */}
         {selectedChannel && (
           <div className="flex-1 flex items-center justify-center animate-in fade-in slide-in-from-left-10 duration-1000">
-            <div className="max-w-lg w-full bg-gradient-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-2xl p-6 rounded-[1.5rem] border border-white/[0.12] space-y-4 shadow-[0_8px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] scale-[0.8] origin-center">
+            <div className="max-w-lg w-full bg-linear-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-2xl p-6 rounded-[1.5rem] border border-white/[0.12] space-y-4 shadow-[0_8px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] scale-[0.8] origin-center">
               {/* Header badges */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -517,18 +539,22 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   <h1 className="text-2xl md:text-3xl font-black italic tracking-tighter uppercase text-white leading-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
                     {selectedChannel.nome}
                   </h1>
-                  <div className="h-0.5 w-12 bg-gradient-to-r from-white/30 to-transparent mt-2 rounded-full" />
+                  <div className="h-0.5 w-12 bg-linear-to-r from-white/30 to-transparent mt-2 rounded-full" />
                 </div>
               </div>
 
               {/* === PROGRAMAÇÃO EPG === */}
               <div className="w-full max-w-[560px] mx-auto">
                 <div className="rounded-2xl border border-white/[0.12] bg-white/[0.05] backdrop-blur-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)]">
+                  <div className="flex items-center gap-2 mb-2">
+                    <img src={selectedChannel.logo} className="w-6 h-6 object-contain rounded" />
+                    <span className="text-sm font-black italic tracking-tight uppercase text-white">{selectedChannel.nome}</span>
+                  </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white/60 uppercase tracking-widest">Programação</span>
-                    <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+                    <span className="text-xs font-bold text-[#E50914] uppercase tracking-widest">Programação</span>
+                    <div className="h-px flex-1 bg-linear-to-r from-[#E50914]/30 to-transparent" />
                     {epgReady && hasEPG(selectedChannel.nome) && (
-                      <span className="text-[7px] font-bold text-emerald-400/50 uppercase tracking-widest flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400/50 animate-pulse" />EPG</span>
+                      <span className="text-[7px] font-bold text-[#E50914]/70 uppercase tracking-widest flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#E50914]/70 animate-pulse" />EPG</span>
                     )}
                   </div>
 
@@ -563,7 +589,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                       <div className="mt-3 grid grid-cols-[1.2fr_1fr] gap-3">
                         <div className="flex flex-col gap-3">
                           {currentProg ? (
-                            <div className="p-4 rounded-xl border border-white/[0.12] bg-gradient-to-br from-white/[0.08] to-white/[0.03] backdrop-blur-2xl space-y-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_4px_24px_rgba(0,0,0,0.3)]">
+                            <div className="p-4 rounded-xl border border-white/[0.12] bg-linear-to-br from-white/[0.08] to-white/[0.03] backdrop-blur-2xl space-y-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_4px_24px_rgba(0,0,0,0.3)] overflow-hidden">
                               <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.15] backdrop-blur-2xl border border-white/[0.2] rounded-lg text-[8px] font-black uppercase tracking-widest shadow-[0_2px_8px_rgba(255,255,255,0.04)]">
                                   <Play size={8} fill="currentColor" /> Agora
@@ -575,7 +601,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                                   <span className="text-[8px] text-emerald-400/60 font-black uppercase animate-pulse flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-emerald-400/60" />AO VIVO</span>
                                 )}
                               </div>
-                              <h3 className="text-base font-black uppercase text-white leading-tight tracking-tight">{currentProg.title}</h3>
+                              <h3 className="text-base font-black uppercase text-white leading-tight tracking-tight line-clamp-2">{currentProg.title}</h3>
                               {currentProg.category && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-[8px] px-2 py-0.5 rounded-md bg-white/[0.07] border border-white/[0.08] text-white/50 font-bold uppercase">{currentProg.category}</span>
@@ -583,12 +609,12 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                                 </div>
                               )}
                               {currentProg.description && !/^\[\d/.test(currentProg.description) && (
-                                <p className="text-[11px] text-white/40 font-medium leading-relaxed line-clamp-3">{currentProg.description}</p>
+                                <p className="text-[11px] text-white/40 font-medium leading-relaxed line-clamp-2">{currentProg.description}</p>
                               )}
                               <div className="space-y-1 pt-1">
                                 <div className="w-full h-[3px] rounded-full bg-white/[0.06] overflow-hidden">
                                   <div
-                                    className="h-full bg-gradient-to-r from-white/50 via-white/40 to-white/20 rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+                                    className="h-full bg-linear-to-r from-white/50 via-white/40 to-white/20 rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.15)]"
                                     style={{ width: `${getProgrammeProgress(currentProg)}%` }}
                                   />
                                 </div>
@@ -611,7 +637,7 @@ const LiveTV: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
                         <div className="flex flex-col gap-3">
                           {nextProg && (
-                            <div className="p-3.5 rounded-xl border border-white/[0.07] bg-white/[0.04] backdrop-blur-xl">
+                            <div className="p-3.5 rounded-xl border border-white/[0.07] bg-white/[0.04] backdrop-blur-xl overflow-hidden">
                               <div className="flex items-center gap-2 mb-1.5">
                                 <span className="text-[8px] font-black uppercase tracking-widest text-white/35">A seguir</span>
                                 <span className="text-[9px] text-white/25 font-bold">{formatTime(nextProg.start)}</span>

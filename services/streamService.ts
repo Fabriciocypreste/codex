@@ -19,9 +19,9 @@ function normalizeTitle(title: string): string {
     .trim();
 }
 
-// Escapar caracteres especiais do PostgREST/ilike (%, _, :)
+// Escapar caracteres especiais do PostgREST/ilike (%, _, \, :)
 function escapeIlike(title: string): string {
-  return title.replace(/%/g, '\\%').replace(/_/g, '\\_');
+  return title.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
 /**
@@ -32,12 +32,16 @@ export async function getStreamUrl(
   type: 'movie' | 'series' = 'movie',
   tmdbId?: number
 ): Promise<string | null> {
-  const cacheKey = normalizeTitle(title);
+  const cacheKey = `${type}_${tmdbId || ''}_${normalizeTitle(title)}`;
   if (streamCache.has(cacheKey)) return streamCache.get(cacheKey) || null;
 
   const table = type === 'movie' ? 'movies' : 'series';
 
   try {
+    // Se não tem título NEM tmdb_id, retorna null (evita match aleatório)
+    if (!title.trim() && (!tmdbId || Number(tmdbId) <= 0)) {
+      return null;
+    }
     // 1. Tentar por tmdb_id numérico (mais preciso)
     if (tmdbId && Number(tmdbId) > 0) {
       const { data, error } = await supabase
@@ -71,7 +75,12 @@ export async function getStreamUrl(
       }
     }
 
-    // 2. Tentar por título exato (case-insensitive)
+    // 2. Tentar por título exato (case-insensitive) - só se tem título
+    if (!title.trim()) {
+      console.warn(`[StreamService] Sem título e tmdb_id ${tmdbId} não encontrado`);
+      streamCache.set(cacheKey, null);
+      return null;
+    }
     const safeTitle = escapeIlike(title);
     const { data: exactMatch, error: errExact } = await supabase
       .from(table)
@@ -236,7 +245,7 @@ export function clearStreamCache(): void {
 
 // Export como objeto para uso tmdbSync-style
 export const streamService = {
-  getMovieUrl: (tmdbId: number | string) => getStreamUrl('', 'movie', Number(tmdbId)),
+  getMovieUrl: (tmdbId: number | string) => getStreamUrl('', 'movie', Number(tmdbId) || undefined),
   getEpisodeUrl: getEpisodeStreamUrl,
   getStreamUrl,
   clearCache: clearStreamCache,

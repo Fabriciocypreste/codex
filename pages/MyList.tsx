@@ -31,7 +31,10 @@ const MyList: React.FC<MyListProps> = ({ onSelectMedia, onPlayMedia }) => {
         getAllSeries(),
       ]);
 
-      const allContent: Media[] = [...dbMovies, ...dbSeries];
+      const allContent: Media[] = [
+        ...dbMovies.map(m => ({ ...m, type: 'movie' as const })),
+        ...dbSeries.map(s => ({ ...s, type: 'series' as const }))
+      ];
       const tmdbIds = new Set(libraryItems.map((li: any) => Number(li.tmdb_id)));
       const matched = allContent.filter(m => tmdbIds.has(Number(m.tmdb_id)));
       setMyList(matched);

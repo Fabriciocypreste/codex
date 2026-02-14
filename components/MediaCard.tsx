@@ -224,7 +224,7 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
               />
               {!imageLoaded && <div className="absolute inset-0 bg-white/5 animate-pulse" />}
               {/* Gradiente sutil na base */}
-              <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 h-2/5 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
             </div>
             {/* visionOS glass border — moldura 3D premium */}
             <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/[0.12] pointer-events-none" />
@@ -255,7 +255,7 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
                   {/* Trailer desativado — somente sob ação do usuário */}
 
                   {/* Gradiente inferior para legibilidade */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-20" />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/90 via-black/40 to-transparent z-20" />
 
                   {/* Botão Mute */}
                   {trailerKey && (

@@ -6,6 +6,7 @@ import { Search, Film } from 'lucide-react';
 import StreamingPlatforms, { platforms } from '../components/StreamingPlatforms';
 import MediaRow from '../components/MediaRow';
 import { playSelectSound } from '../utils/soundEffects';
+import { getAllMovies } from '../services/supabaseService';
 
 interface MoviesProps {
     movies: Media[];
@@ -20,6 +21,8 @@ const COLS_PER_ROW = 6;
 const Movies: React.FC<MoviesProps> = ({ movies, moviesByGenre, trendingMovies, onSelectMedia, onPlayMedia }) => {
     const [featured, setFeatured] = useState<Media | null>(null);
     const [filter, setFilter] = useState<string | null>(null);
+    const [localMovies, setLocalMovies] = useState<Media[] | null>(null);
+    const [localMoviesByGenre, setLocalMoviesByGenre] = useState<Map<string, Media[]>>(new Map());
 
     useEffect(() => {
         if (trendingMovies.length > 0) {
@@ -28,9 +31,35 @@ const Movies: React.FC<MoviesProps> = ({ movies, moviesByGenre, trendingMovies, 
         }
     }, [trendingMovies]);
 
+    // Fallback: se não houver movies vindos do App, buscar direto do Supabase (útil para teste)
+    useEffect(() => {
+        if ((movies?.length || 0) === 0 && localMovies === null) {
+            (async () => {
+                try {
+                    const dbMovies = await getAllMovies();
+                    const typed = dbMovies.map(m => ({ ...m, type: 'movie' } as Media));
+                    setLocalMovies(typed);
+                    const map = new Map<string, Media[]>();
+                    typed.forEach(item => {
+                        const g = Array.isArray(item.genre) && item.genre.length > 0 ? item.genre[0] : 'Outros';
+                        if (!map.has(g)) map.set(g, []);
+                        map.get(g)!.push(item);
+                    });
+                    setLocalMoviesByGenre(map);
+                } catch (e) {
+                    console.error('Fallback getAllMovies failed', e);
+                    setLocalMovies([]);
+                }
+            })();
+        }
+    }, [movies, localMovies]);
+
+    const effectiveMovies = (movies && movies.length > 0) ? movies : (localMovies || []);
+    const effectiveMoviesByGenre = (moviesByGenre && moviesByGenre.size > 0) ? moviesByGenre : localMoviesByGenre;
+
     const filteredMovies = useMemo(() => filter
-        ? movies.filter(m => m.title.toLowerCase().includes(filter.toLowerCase()))
-        : null, [movies, filter]);
+        ? effectiveMovies.filter(m => m.title.toLowerCase().includes(filter.toLowerCase()))
+        : null, [effectiveMovies, filter]);
 
     const handleSelect = useCallback((m: Media) => onSelectMedia(m), [onSelectMedia]);
 
@@ -47,7 +76,7 @@ const Movies: React.FC<MoviesProps> = ({ movies, moviesByGenre, trendingMovies, 
             {/* Hero Banner (Only shown if no filter) */}
             {!filter && (
                 <div className="mt-0 relative z-0">
-                    <HeroBanner mediaType="movie" onPlayMedia={onPlayMedia} onSelectMedia={onSelectMedia} dbMedia={movies} />
+                    <HeroBanner mediaType="movie" onPlayMedia={onPlayMedia} onSelectMedia={onSelectMedia} dbMedia={effectiveMovies} />
                 </div>
             )}
 
@@ -182,7 +211,7 @@ const Movies: React.FC<MoviesProps> = ({ movies, moviesByGenre, trendingMovies, 
                             />
                         )}
 
-                        {Array.from(moviesByGenre.entries()).map(([genre, items], idx) => (
+                        {Array.from(effectiveMoviesByGenre.entries()).map(([genre, items], idx) => (
                             <MediaRow
                                 key={genre}
                                 title={genre}

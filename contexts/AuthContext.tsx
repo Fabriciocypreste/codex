@@ -28,22 +28,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Buscar sessão existente do localStorage
-    const storedSession = localStorage.getItem('supabaseSession');
-    if (storedSession) {
-      try {
-        const parsed = JSON.parse(storedSession);
-        setSession(parsed);
-        setUser(parsed?.user ?? null);
-        setLoading(false);
-      } catch { }
-    }
-    // Buscar sessão do supabase
+    // Buscar sessão real do Supabase (fonte de verdade)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-      if (session) localStorage.setItem('supabaseSession', JSON.stringify(session));
     });
 
     // Escutar mudanças de auth
@@ -52,8 +41,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
-        if (session) localStorage.setItem('supabaseSession', JSON.stringify(session));
-        else localStorage.removeItem('supabaseSession');
       }
     );
 
@@ -74,8 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.session) {
         setSession(data.session);
         setUser(data.session.user);
-        localStorage.setItem('supabaseSession', JSON.stringify(data.session));
-        setLoading(false); // Force loading to false on success
+        setLoading(false);
         return { error: null };
       }
 
@@ -88,18 +74,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUp = async (email: string, password: string) => {
-    const response = await supabase.auth.signUp({ email, password });
-    console.log('Supabase signUp response:', response);
-    const { error } = response;
-    if (error) return { error: error.message };
-    return { error: null };
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signUp({ email, password });
+      setLoading(false);
+      if (error) return { error: error.message };
+      return { error: null };
+    } catch (err) {
+      setLoading(false);
+      return { error: 'Erro inesperado no cadastro' };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    localStorage.removeItem('supabaseSession');
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Erro ao fazer logout:', err);
+    } finally {
+      setUser(null);
+      setSession(null);
+    }
   };
 
   return (

@@ -1,5 +1,6 @@
 import { Media } from '../types';
 import { deduplicateMedia, sanitizeTMDBItem } from '../utils/mediaUtils';
+import { getCachedTmdb, setCachedTmdb } from '../utils/tmdbCache';
 
 const READ_TOKEN = import.meta.env.VITE_TMDB_READ_TOKEN;
 const BASE_URL = 'https://api.themoviedb.org/3';
@@ -32,21 +33,27 @@ async function fetchTMDBById(tmdbId: number, type: 'movie' | 'series'): Promise<
   backdrop?: string;
   overview?: string;
 } | null> {
+  const cacheKey = `tmdb-id-${type}-${tmdbId}`;
+  const cached = getCachedTmdb(cacheKey);
+  if (cached !== null) return cached;
+
   try {
     const endpoint = type === 'movie' ? 'movie' : 'tv';
     const res = await fetch(`${BASE_URL}/${endpoint}/${tmdbId}?language=pt-BR`, fetchOptions);
     if (!res.ok) {
-      if (res.status === 404) return null; // TMDB ID inválido
+      if (res.status === 404) return null;
       return null;
     }
     const data = await res.json();
     const sanitized = sanitizeTMDBItem(data, type);
     if (!sanitized) return null;
-    return {
+    const result = {
       poster: sanitized.poster_path ? `${IMAGE_BASE}/w500${sanitized.poster_path}` : undefined,
       backdrop: sanitized.backdrop_path ? `${IMAGE_BASE}/original${sanitized.backdrop_path}` : undefined,
       overview: sanitized.overview,
     };
+    setCachedTmdb(cacheKey, result);
+    return result;
   } catch {
     return null;
   }
@@ -61,6 +68,10 @@ async function searchTMDBByTitle(title: string, type: 'movie' | 'series'): Promi
   tmdb_id?: number;
   overview?: string;
 } | null> {
+  const cacheKey = `tmdb-search-${type}-${title.toLowerCase().trim()}`;
+  const cached = getCachedTmdb(cacheKey);
+  if (cached !== null) return cached;
+
   try {
     const endpoint = type === 'movie' ? 'movie' : 'tv';
     const res = await fetch(
@@ -73,12 +84,14 @@ async function searchTMDBByTitle(title: string, type: 'movie' | 'series'): Promi
     if (!first) return null;
     const sanitized = sanitizeTMDBItem(first, type);
     if (!sanitized) return null;
-    return {
+    const result = {
       poster: sanitized.poster_path ? `${IMAGE_BASE}/w500${sanitized.poster_path}` : undefined,
       backdrop: sanitized.backdrop_path ? `${IMAGE_BASE}/original${sanitized.backdrop_path}` : undefined,
       tmdb_id: sanitized.id,
       overview: sanitized.overview,
     };
+    setCachedTmdb(cacheKey, result);
+    return result;
   } catch {
     return null;
   }
@@ -150,7 +163,7 @@ export function organizeByGenre(items: Media[]): Map<string, Media[]> {
   // Filtrar gêneros com poucos itens e ordenar por quantidade
   return new Map(
     Array.from(genreMap.entries())
-      .filter(([_, items]) => items.length >= 2)
+      .filter(([_, items]) => items.length >= 1)
       .sort((a, b) => b[1].length - a[1].length)
   );
 }

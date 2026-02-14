@@ -214,7 +214,7 @@ const SearchModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpe
                       alt={item.name || item.title}
                       className="w-full h-full object-cover group-hover:scale-110 group-focus:scale-110 transition-transform duration-1000"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity p-6 flex flex-col justify-end">
+                    <div className="absolute inset-0 bg-linear-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity p-6 flex flex-col justify-end">
                       <p className="text-[10px] font-black uppercase text-red-500 mb-1">{item.media_type}</p>
                       <p className="font-bold text-sm truncate">{item.name || item.title}</p>
                     </div>
@@ -413,10 +413,21 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
   );
 
   if (isLoading || !series) return (
-    <div className="min-h-screen flex items-center justify-center bg-black">
-      <div className="thick-glass p-8 md:p-16 rounded-full animate-pulse flex flex-col items-center">
-        <div className="w-8 h-8 md:w-10 md:h-10 border-2 border-t-red-600 border-white/5 rounded-full animate-spin mb-4"></div>
-        <RedXLogo className="h-4 md:h-6 opacity-40 scale-75" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, rgba(229,9,20,0.08) 0%, rgba(11,11,15,0.95) 60%, #0B0B0F 100%)' }}>
+      <div className="flex flex-col items-center gap-5">
+        {/* Logo REDX animada */}
+        <div className="relative">
+          {/* Anel giratório externo */}
+          <svg className="w-20 h-20 animate-spin" style={{ animationDuration: '2.5s' }} viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(229,9,20,0.15)" strokeWidth="2" />
+            <circle cx="40" cy="40" r="36" fill="none" stroke="#E50914" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="60 170" />
+          </svg>
+          {/* Logo no centro */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <img src="/logored.png" alt="REDX" className="h-8 w-auto object-contain opacity-80" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+          </div>
+        </div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-white/25">Carregando detalhes</p>
       </div>
     </div>
   );
@@ -435,7 +446,7 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
             filter: 'blur(30px) brightness(0.35) saturate(1.2)'
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black" />
+        <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-black" />
       </div>
 
       <header className="fixed top-0 left-0 right-0 z-[60] py-4 md:py-8 px-4 md:px-16 flex justify-between items-center transition-all duration-500 pointer-events-none">
@@ -475,8 +486,8 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
         ) : (
           <div className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-2000 ease-out" style={{ backgroundImage: `url(${getImageUrl(series.backdrop_path, 'original')})` }} />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-black via-black/30 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-r from-black via-transparent to-transparent" />
         <div className="relative z-10 h-full responsive-container flex flex-col justify-end pb-20 md:pb-40 px-8">
           <div className="max-w-4xl animate-in fade-in slide-in-from-bottom-10 duration-1000 px-4 md:px-0">
             {logoPath ? (
@@ -521,9 +532,9 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
                 <div className="absolute inset-0 bg-red-600/10 blur-[100px] -z-10 animate-pulse" style={{ transform: 'translateZ(-50px)' }}></div>
                 <div className="relative overflow-hidden aspect-[2/3] w-full" style={{ transform: 'translateZ(30px)' }}>
                   <img src={getImageUrl(series.poster_path, 'w780')} alt={series.name} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-gradient-to-tr from-white/5 via-transparent to-white/10 mix-blend-overlay"></div>
+                  <div className="absolute inset-0 bg-linear-to-tr from-white/5 via-transparent to-white/10 mix-blend-overlay"></div>
                 </div>
-                <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-12 bg-gradient-to-t from-black via-black/30 to-transparent">
+                <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-12 bg-linear-to-t from-black via-black/30 to-transparent">
                   <div className="vision-btn px-8 py-4 rounded-3xl text-[10px] md:text-[12px] font-black tracking-[0.5em] uppercase text-red-500 shadow-2xl mx-auto border border-red-600/30 flex items-center gap-3 backdrop-blur-xl" style={{ transform: 'translateZ(100px)' }}>
                     <div className="w-2 h-2 rounded-full bg-red-600 animate-ping"></div>
                     RED X PREMIUM
@@ -671,7 +682,7 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
                       style={{ transform: 'translateZ(40px)' }}
                     >
                       <img src={getImageUrl(p.profile_path, 'w500')} alt={p.name} className="w-full h-full object-cover object-top grayscale-[0.2] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-1000" style={{ transform: 'translateZ(0px)' }} />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-700"></div>
+                      <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-700"></div>
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-700">
                         <div className="w-10 h-10 md:w-12 md:h-12 vision-btn rounded-full flex items-center justify-center shadow-3xl text-white border border-white/20" style={{ transform: 'translateZ(60px)' }}>
                           <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
@@ -692,14 +703,14 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
         <section className="responsive-container pb-24 md:pb-64">
           <div className="flex items-center gap-6 md:gap-8 mb-16 md:mb-20">
             <h2 className="text-[9px] md:text-[11px] font-black tracking-[0.8em] text-white/15 uppercase whitespace-nowrap">Expansão Spatial</h2>
-            <div className="h-px flex-1 bg-gradient-to-r from-red-600/30 via-white/5 to-transparent"></div>
+            <div className="h-px flex-1 bg-linear-to-r from-red-600/30 via-white/5 to-transparent"></div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6 md:gap-12">
             {similar.slice(0, 6).map(item => (
               <div key={item.id} className="group cursor-pointer" tabIndex={0} role="button" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); playSelectSound(); } }} >
                 <div className="relative aspect-[2/3] rounded-[2rem] md:rounded-[3rem] overflow-hidden mb-6 md:mb-8 shadow-2xl transition-all duration-1000 group-hover:-translate-y-4 group-focus:-translate-y-4 border border-white/10 hover:border-white/30 focus-within:border-[#E50914]/50 focus-within:ring-2 focus-within:ring-[#E50914]">
                   <img src={getImageUrl(item.poster_path, 'w500')} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 group-focus:scale-110 transition-transform duration-1000" loading="lazy" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-red-950/95 via-black/10 to-transparent opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-all duration-700 flex flex-col justify-end p-6 md:p-8">
+                  <div className="absolute inset-0 bg-linear-to-t from-red-950/95 via-black/10 to-transparent opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-all duration-700 flex flex-col justify-end p-6 md:p-8">
                     <p className="text-red-500 font-black text-[10px] mb-1">★ {item.vote_average.toFixed(1)}</p>
                     <p className="font-black text-[10px] md:text-xs uppercase tracking-[0.1em] truncate drop-shadow-lg">{item.name}</p>
                   </div>
@@ -711,7 +722,7 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
         </section>
       </main>
 
-      <footer className="relative z-20 py-24 md:py-48 bg-gradient-to-b from-transparent to-red-950/20 border-t border-white/10">
+      <footer className="relative z-20 py-24 md:py-48 bg-linear-to-b from-transparent to-red-950/20 border-t border-white/10">
         <div className="responsive-container text-center space-y-12 md:space-y-16">
           <RedXLogo className="h-8 md:h-10 justify-center opacity-30 hover:opacity-100 transition-all duration-700 scale-110" />
           <div className="flex justify-center flex-wrap gap-8 md:gap-16 text-[9px] md:text-[11px] font-black uppercase tracking-[0.5em] text-white/20">

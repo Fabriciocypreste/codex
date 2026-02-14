@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.movies (
     stars TEXT[] DEFAULT '{}',
     trailer_key TEXT,
     stream_url TEXT,
+    status TEXT DEFAULT 'published',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -44,6 +45,8 @@ CREATE TABLE IF NOT EXISTS public.series (
     logo_url TEXT,
     stars TEXT[] DEFAULT '{}',
     trailer_key TEXT,
+    stream_url TEXT,
+    status TEXT DEFAULT 'published',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
