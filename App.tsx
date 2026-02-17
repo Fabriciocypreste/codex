@@ -59,7 +59,7 @@ import { getCatalogWithFilters } from './services/supabaseService';
 import { getCatalogSettings } from './services/catalogService';
 import { canAccessContent } from './services/profileService';
 import { fetchTMDBCatalog } from './services/tmdbCatalog';
-import { getStreamUrl, clearStreamCache } from './services/streamService';
+import { getStreamUrl, getEpisodeStreamUrl, clearStreamCache } from './services/streamService';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { SpatialNavProvider, useSpatialNav } from './hooks/useSpatialNavigation';
@@ -304,17 +304,27 @@ const LegacyAppInner: React.FC = () => {
       return;
     }
     const fetchNext = async () => {
-      if (!selectedMedia.tmdb_id) return;
-      // Extrair season/episode do media atual (fallback S1E1)
       const season = (selectedMedia as any).season_number || 1;
       const episode = (selectedMedia as any).episode_number || 1;
-      const result = await getNextEpisode(selectedMedia.tmdb_id, season, episode, user?.id);
-      if (result) {
+      if (selectedMedia.tmdb_id) {
+        const result = await getNextEpisode(selectedMedia.tmdb_id, season, episode, user?.id);
+        if (result) {
+          setNextEpisodeData({
+            title: result.title,
+            season: result.season,
+            episode: result.episode,
+            stream_url: result.stream_url,
+          });
+          return;
+        }
+      }
+      const nextUrl = await getEpisodeStreamUrl(selectedMedia.title, season, episode + 1, selectedMedia.tmdb_id);
+      if (nextUrl) {
         setNextEpisodeData({
-          title: result.title,
-          season: result.season,
-          episode: result.episode,
-          stream_url: result.stream_url,
+          title: `Episódio ${episode + 1}`,
+          season,
+          episode: episode + 1,
+          stream_url: nextUrl,
         });
       } else {
         setNextEpisodeData(null);

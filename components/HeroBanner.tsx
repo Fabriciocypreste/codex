@@ -13,6 +13,11 @@ interface HeroBannerProps {
   onBackdropChange?: (url: string) => void;
 }
 
+// Trailers customizados (YouTube video ID)
+const TRAILER_OVERRIDES: Record<number, string> = {
+  37680: 'k13aNEQKawA', // Suits (Homens de Terno)
+};
+
 // TMDB IDs das séries curadas para o banner principal
 const BANNER_TMDB_IDS = [
   1396,   // Breaking Bad
@@ -148,8 +153,11 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
       setLogoUrl(null);
     }
 
-    // Trailer — cache hit ou media.trailer_key
-    if (movie.trailer_key) {
+    // Trailer — override > media.trailer_key > cache > TMDB
+    const overrideKey = movie.tmdb_id ? TRAILER_OVERRIDES[Number(movie.tmdb_id)] : undefined;
+    if (overrideKey) {
+      setTrailerKey(overrideKey);
+    } else if (movie.trailer_key) {
       setTrailerKey(movie.trailer_key);
     } else if (trailerCache.current.has(cacheKey)) {
       setTrailerKey(trailerCache.current.get(cacheKey) || null);
@@ -157,23 +165,21 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
       setTrailerKey(null);
     }
 
-    // Buscar dados faltantes no TMDB (logo e/ou trailer)
     const needsLogo = !movie.logo_url && !logoCache.current.has(cacheKey);
-    const needsTrailer = !movie.trailer_key && !trailerCache.current.has(cacheKey);
+    const needsTrailer = !overrideKey && !movie.trailer_key && !trailerCache.current.has(cacheKey);
 
     if ((needsLogo || needsTrailer) && movie.tmdb_id && Number(movie.tmdb_id) > 0) {
       getMediaDetailsByID(Number(movie.tmdb_id), movie.type).then(details => {
         if (!details) return;
-        // Logo
         if (needsLogo) {
           logoCache.current.set(cacheKey, details.logo || null);
           setLogoUrl(prev => prev || details.logo || null);
           try { localStorage.setItem('redx-logo-cache', JSON.stringify(Array.from(logoCache.current.entries()))); } catch {}
         }
-        // Trailer
         if (needsTrailer) {
-          trailerCache.current.set(cacheKey, details.trailer || null);
-          setTrailerKey(prev => prev || details.trailer || null);
+          const key = overrideKey || details.trailer || null;
+          trailerCache.current.set(cacheKey, key);
+          setTrailerKey(prev => prev || key);
           try { localStorage.setItem('redx-trailer-cache', JSON.stringify(Array.from(trailerCache.current.entries()))); } catch {}
         }
       }).catch(() => {
@@ -199,8 +205,25 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
     if (backdropUrl && onBackdropChange) onBackdropChange(backdropUrl);
   }, [backdropUrl, onBackdropChange]);
 
-  const year = movie.year || (movie.release_date ? new Date(movie.release_date).getFullYear() : null);
+  const year = movie.year || (movie.release_date ? new Date(movie.release_date).getFullYear() : null) || (movie.first_air_date ? new Date(movie.first_air_date).getFullYear() : null);
   const rating = typeof movie.rating === 'number' ? movie.rating : parseFloat(String(movie.rating || '0'));
+
+  // Release curto — máx 3 linhas
+  const releaseLines: string[] = [];
+  const dateStr = movie.release_date || movie.first_air_date;
+  if (dateStr) {
+    try {
+      const d = new Date(dateStr);
+      const y = d.getFullYear();
+      const m = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+      const day = d.getDate();
+      if (day > 0 && m) releaseLines.push(`${day} ${m}`, String(y));
+      else if (m) releaseLines.push(`${m} ${y}`);
+      else releaseLines.push(String(y));
+    } catch { if (year) releaseLines.push(String(year)); }
+  } else if (year) releaseLines.push(String(year));
+  const genres = (movie.genre || []).slice(0, 2).join(' · ');
+  if (genres && releaseLines.length < 3) releaseLines.push(genres);
 
   // Converter rating TMDB (0-10) em estrelas (0-5)
   const starCount = Math.round((rating / 10) * 5);
@@ -268,12 +291,12 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                 }}
               >
-                {/* Logo pequena no topo */}
+                {/* Logo + Release curto (máx 3 linhas) */}
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.2, duration: 0.7 }}
-                  className="w-full flex justify-center"
+                  className="w-full flex flex-col items-center gap-1"
                 >
                   {logoUrl ? (
                     <img
@@ -285,6 +308,15 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                     <h2 className="text-lg font-black text-white drop-shadow-2xl leading-tight tracking-wide uppercase">
                       {movie.title}
                     </h2>
+                  )}
+                  {releaseLines.length > 0 && (
+                    <div className="flex flex-col items-center gap-0.5 text-center w-full" style={{ maxHeight: '3.6em' }}>
+                      {releaseLines.slice(0, 3).map((line, i) => (
+                        <span key={i} className="text-[11px] font-bold text-white/70 uppercase tracking-[0.2em] leading-tight truncate max-w-full">
+                          {line}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </motion.div>
 

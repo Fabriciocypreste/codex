@@ -8,7 +8,7 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Media } from '../types';
-import { VideoOff, X, Rewind, Pause, Play, FastForward, Volume2, VolumeX, Maximize, SkipForward } from 'lucide-react';
+import { VideoOff, ChevronLeft, X, Rewind, Pause, Play, FastForward, Volume2, VolumeX, Maximize, SkipForward } from 'lucide-react';
 import { getTrailer } from '../services/tmdb';
 import { userService } from '../services/userService';
 import { getStreamUrl } from '../services/streamService';
@@ -370,11 +370,17 @@ const Player: React.FC<PlayerProps> = ({ media, onClose, nextEpisode, onPlayNext
 
       {/* TOP BAR */}
       <div className={`absolute top-0 inset-x-0 p-8 flex justify-between items-start transition-all duration-700 z-10 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'} bg-gradient-to-b from-black/80 to-transparent`}>
-        <div className="flex flex-col gap-2">
-          <span className="text-red-600 uppercase tracking-[0.5em] font-black text-[10px]">Redflix Player</span>
-          <h2 className="text-2xl font-black tracking-tighter">{media.title}</h2>
+        <div className="flex items-center gap-4">
+          <button onClick={handleClose} tabIndex={0} className="flex items-center gap-2 px-4 py-2 rounded-xl glass border border-white/20 hover:bg-white/10 transition-all group">
+            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+            <span className="text-sm font-bold uppercase tracking-wider">Voltar</span>
+          </button>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-red-600 uppercase tracking-[0.4em] font-black text-[10px]">Redflix Player</span>
+            <h2 className="text-xl font-black tracking-tighter">{media.title}</h2>
+          </div>
         </div>
-        <button onClick={handleClose} tabIndex={0} className="w-12 h-12 rounded-full glass border border-white/20 flex items-center justify-center hover:bg-red-600 transition-all"><X className="w-6 h-6" /></button>
+        <button onClick={handleClose} tabIndex={0} className="w-12 h-12 rounded-full glass border border-white/20 flex items-center justify-center hover:bg-red-600 transition-all" aria-label="Fechar"><X className="w-6 h-6" /></button>
       </div>
 
       {/* CENTER CONTROLS */}

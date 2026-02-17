@@ -36,7 +36,12 @@ export const fetchSeries = async (type: 'popular' | 'top_rated' = 'popular'): Pr
   return Promise.all(data.results.map((item: any) => transformTMDBItem(item, 'series')));
 };
 
+const TRAILER_OVERRIDES: Record<number, string> = {
+  37680: 'k13aNEQKawA', // Suits (Homens de Terno)
+};
+
 export const getTrailer = async (id: number, type: 'movie' | 'series'): Promise<string | undefined> => {
+  if (TRAILER_OVERRIDES[id]) return TRAILER_OVERRIDES[id];
   const res = await fetch(`${BASE_URL}/${type === 'movie' ? 'movie' : 'tv'}/${id}/videos?language=pt-BR`, fetchOptions);
   const data = await res.json();
   const trailer = data.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
@@ -48,8 +53,10 @@ export const getMediaDetailsByID = async (id: number, type: 'movie' | 'series') 
     const res = await fetch(`${BASE_URL}/${type === 'movie' ? 'movie' : 'tv'}/${id}?append_to_response=videos,images&include_image_language=pt,en,null&language=pt-BR`, fetchOptions);
     const data = await res.json();
 
-    const trailer = data.videos?.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube' && (v.iso_639_1 === 'pt' || v.name.toLowerCase().includes('dublado'))) ||
+    const trailerKey = TRAILER_OVERRIDES[id] ||
+      data.videos?.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube' && (v.iso_639_1 === 'pt' || v.name.toLowerCase().includes('dublado'))) ||
       data.videos?.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
+    const trailer = typeof trailerKey === 'string' ? { key: trailerKey } : trailerKey;
 
     const logo = data.images?.logos?.find((l: any) => l.iso_639_1 === 'pt') ||
       data.images?.logos?.find((l: any) => l.iso_639_1 === 'en') ||
