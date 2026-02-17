@@ -1,3 +1,7 @@
 approval_policy: never
 sandbox_mode: danger-full-access
+<<<<<<< ours
 network_access: enabled
+=======
+network_access: enabled
+>>>>>>> theirs

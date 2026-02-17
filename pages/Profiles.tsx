@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSpatialNav } from '../hooks/useSpatialNavigation';
 import { createProfile, getProfiles, updateProfile, deleteProfile, AVATAR_COLORS, PARENTAL_RATINGS, verifyParentalPin } from '../services/profileService';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaPen, FaLock, FaChild, FaTrash, FaCheck, FaTimes } from 'react-icons/fa';
+import { Plus, Pencil, Lock, Baby, Trash2, Check, X } from 'lucide-react';
 import { playSelectSound, playNavigateSound, playBackSound } from '../utils/soundEffects';
 
 interface ProfilesProps {
@@ -13,7 +13,7 @@ interface ProfilesProps {
 
 const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
   const { user } = useAuth();
-  const { setFocus } = useSpatialNav();
+  const { setPosition } = useSpatialNav();
   
   // Data State
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
@@ -41,13 +41,23 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
 
   // Fetch Profiles
   const loadProfiles = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-      const data = await getProfiles(user.id);
-      setProfiles(data);
+      const timeoutMs = 10000;
+      const data = await Promise.race([
+        getProfiles(user.id),
+        new Promise<UserProfile[]>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), timeoutMs)
+        ),
+      ]);
+      setProfiles(data || []);
     } catch (error) {
       console.error('Erro ao carregar perfis:', error);
+      setProfiles([]);
     } finally {
       setLoading(false);
     }
@@ -60,13 +70,19 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
   // Spatial Nav Registration
   useEffect(() => {
     if (!loading && profiles.length > 0) {
-      const firstId = profiles[0]?.id || 'add-profile-btn';
-      setTimeout(() => setFocus(firstId), 100);
+      // Focar o primeiro perfil via D-Pad (row 0, col 0)
+      setTimeout(() => {
+        setPosition(0, 0);
+        // Também focar o elemento DOM diretamente
+        const firstBtn = document.querySelector('[data-nav-item]') as HTMLElement;
+        if (firstBtn) firstBtn.focus();
+      }, 100);
     }
-  }, [loading, profiles, setFocus]);
+  }, [loading, profiles, setPosition]);
 
   // Handlers
   const handleProfileClick = (profile: UserProfile) => {
+    if (!profile) return;
     playSelectSound();
     
     if (isEditMode) {
@@ -95,7 +111,7 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
   const handlePinSubmit = async () => {
     if (!selectedProfile) return;
     
-    const isValid = await verifyParentalPin(selectedProfile.id, pinCurrent);
+    const isValid = verifyParentalPin(selectedProfile, pinCurrent);
     if (isValid) {
       playSelectSound();
       setShowPinModal(false);
@@ -108,18 +124,17 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
   };
 
   const handleSaveProfile = async () => {
-    if (!user || !formData.name) return;
+    if (!user || !formData.name?.trim()) return;
     playSelectSound();
 
     try {
       if (selectedProfile) {
-        const updated = await updateProfile(selectedProfile.id, {
+        const updated = await updateProfile(selectedProfile.id, user.id, {
           name: formData.name,
           isKids: formData.isKids,
           avatarColor: formData.avatarColor,
           parentalRating: formData.parentalRating,
-          parentalPin: formData.parentalPin,
-          autoPlayNext: formData.autoPlayNext
+          parentalPin: formData.parentalPin
         });
         if (updated) {
           setProfiles(prev => prev.map(p => p.id === updated.id ? updated : p));
@@ -193,149 +208,174 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showPinModal, pinCurrent, selectedProfile]);
 
-  const containerStyle: React.CSSProperties = {
-    backgroundColor: 'var(--obsidian-bg)',
-    fontFamily: '"Inter", sans-serif',
-    overflow: 'hidden',
-    height: '100vh',
-    position: 'relative',
-    width: '100%'
-  };
-
-  const backgroundOrbsStyle: React.CSSProperties = {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 0,
-    pointerEvents: 'none',
-    backgroundImage: `
-      radial-gradient(circle at 50% -20%, var(--crimson-glow) 0%, transparent 60%),
-      radial-gradient(circle at 0% 100%, #330000 0%, transparent 40%),
-      radial-gradient(circle at 100% 100%, #220000 0%, transparent 40%)
-    `,
-    backgroundAttachment: 'fixed'
-  };
-
   return (
-    <div style={containerStyle} className="flex flex-col items-center justify-center text-white">
-      <div style={backgroundOrbsStyle} className="animate-pulse-red" />
-      
-      <div className="z-10 w-full max-w-4xl px-6 flex flex-col items-center gap-8">
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
+    <div
+      className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center text-white overflow-hidden"
+      style={{ background: 'radial-gradient(ellipse at top left, #990000 0%, #1a0000 30%, #000000 70%)' }}
+    >
+      {/* Container principal */}
+      <main className="relative w-full max-w-4xl flex flex-col items-center gap-5">
+        
+        {/* Glass Card */}
+        <motion.section
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+          className="w-full max-w-2xl flex flex-col items-center text-center space-y-12 p-10 rounded-[20px]"
+          style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(15px)',
+            WebkitBackdropFilter: 'blur(15px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+          }}
         >
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-2 tracking-tight">Quem está assistindo?</h1>
-          {isEditMode && <p className="text-sm md:text-base text-white/60">Selecione um perfil para editar</p>}
-        </motion.div>
+          {/* Título */}
+          <div>
+            <h1 className="text-[24px] text-white font-medium tracking-tight">Quem está assistindo?</h1>
+            {isEditMode && <p className="text-sm text-white/50 mt-2">Selecione um perfil para editar</p>}
+          </div>
 
-        <div className="flex flex-wrap justify-center gap-5 md:gap-8">
-          {loading ? (
-             <div className="flex items-center gap-2">
-               <div className="w-6 h-6 border-2 border-[#E50914] border-t-transparent rounded-full animate-spin" />
-               <span className="text-white/50">Carregando perfis...</span>
-             </div>
-          ) : (
-            <>
-              {profiles.map((profile) => (
-                <div key={profile.id} className="flex flex-col items-center gap-2 group relative">
+          {/* Grid de Perfis — wrapper com data-nav-row para D-Pad funcionar */}
+          <div className="flex flex-wrap justify-center gap-8 md:gap-12" data-nav-row="0">
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 border-2 border-[#E50914] border-t-transparent rounded-full animate-spin" />
+                <span className="text-white/50">Carregando perfis...</span>
+              </div>
+            ) : (
+              <>
+                {profiles.map((profile, idx) => (
+                  <div key={profile.id} className="group flex flex-col items-center space-y-3 cursor-pointer">
                     <button
-                        id={profile.id}
-                        className={`
-                        w-20 h-20 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-2xl overflow-hidden relative shadow-lg
-                        transition-all duration-300 transform
-                        hover:ring-4 hover:ring-white
+                      id={profile.id}
+                      className="w-[120px] h-[120px] rounded-xl overflow-hidden border-2 border-transparent
+                        group-hover:border-white transition-all duration-300 shadow-lg
                         focus:outline-none focus-visible:!outline-none
-                        focus-visible:ring-4 focus-visible:ring-white focus-visible:scale-105
-                        ${isEditMode ? 'animate-pulse' : ''}
-                        `}
-                        style={{ boxShadow: 'none' }}
-                        onClick={() => handleProfileClick(profile)}
-                        onFocus={() => playNavigateSound()}
-                        data-nav-item
-                        data-profile-btn
+                        focus-visible:border-white focus-visible:scale-105 relative"
+                      style={{ boxShadow: 'none' }}
+                      onClick={() => handleProfileClick(profile)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleProfileClick(profile);
+                        }
+                      }}
+                      onFocus={() => playNavigateSound()}
+                      data-nav-item
+                      data-profile-btn
+                      data-nav-col={idx}
                     >
-                        <div className={`w-full h-full ${profile.avatarColor || 'bg-gray-600'} flex items-center justify-center relative`}>
-                            {profile.avatar ? (
-                                <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
-                            ) : (
-                                <span className="text-2xl md:text-4xl font-bold uppercase select-none">{profile.name[0]}</span>
-                            )}
-                            
-                            {isEditMode && (
-                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                                <FaPen className="text-white text-xl md:text-2xl" />
-                                </div>
-                            )}
-                            
-                            {!isEditMode && profile.parentalPin && (
-                                <div className="absolute top-2 right-2 bg-black/60 p-1.5 rounded-full">
-                                <FaLock className="text-white/80 text-xs" />
-                                </div>
-                            )}
+                      <div className={`w-full h-full ${profile.avatarColor || 'bg-gray-600'} flex items-center justify-center relative`}>
+                        {profile.avatar ? (
+                          <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-4xl font-bold uppercase select-none">{profile.name?.[0] || '?'}</span>
+                        )}
 
-                            {profile.isKids && (
-                                <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-[10px] py-1 text-center font-bold uppercase tracking-widest text-white/90">
-                                Kids
-                                </div>
-                            )}
-                        </div>
+                        {isEditMode && (
+                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <Pencil className="text-white text-2xl" />
+                          </div>
+                        )}
+
+                        {!isEditMode && profile.parentalPin && (
+                          <div className="absolute top-2 right-2 bg-black/60 p-1.5 rounded-full">
+                            <Lock className="text-white/80 text-xs" />
+                          </div>
+                        )}
+
+                        {profile.isKids && (
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-[10px] py-1 text-center font-bold uppercase tracking-widest text-white/90">
+                            Kids
+                          </div>
+                        )}
+                      </div>
                     </button>
-                    <span className="text-white/60 text-xs md:text-sm group-hover:text-white transition-colors text-center max-w-[100px] md:max-w-[120px] truncate">
-                        {profile.name}
+                    <span className="text-gray-300 group-hover:text-white text-sm md:text-base font-medium transition-colors max-w-[120px] truncate">
+                      {profile.name || 'Sem nome'}
                     </span>
-                </div>
-              ))}
-
-              {profiles.length < 5 && (
-                <button
-                  id="add-profile-btn"
-                  className={`
-                    group relative w-20 h-20 md:w-28 md:h-28 lg:w-32 lg:h-32 flex flex-col items-center justify-center gap-2
-                    rounded-2xl transition-all duration-300
-                    hover:scale-105 focus:scale-105 focus:outline-none focus-visible:!outline-none
-                    focus-visible:ring-4 focus-visible:ring-white
-                  `}
-                  data-nav-item
-                  data-profile-btn
-                  data-nav-row="0" 
-                  data-nav-col={profiles.length}
-                  onClick={() => {
-                    resetForm();
-                    setSelectedProfile(null);
-                    setShowEditModal(true);
-                    playSelectSound();
-                  }}
-                >
-                  <div className="w-full h-full rounded-full border-2 border-white/20 bg-transparent flex items-center justify-center group-hover:bg-white/10 group-focus:border-white transition-all">
-                    <FaPlus className="text-2xl md:text-3xl text-white/50 group-hover:text-white group-focus:text-white transition-colors" />
                   </div>
-                  <span className="text-xs md:text-sm text-white/50 group-hover:text-white font-medium">Adicionar</span>
-                </button>
-              )}
-            </>
-          )}
-        </div>
+                ))}
 
-        <button
-          className="mt-4 px-6 py-2 border border-white/30 hover:border-white text-white/60 hover:text-white uppercase tracking-widest text-xs font-semibold transition-all hover:bg-white/10 rounded-lg"
-          onClick={toggleEditMode}
-          data-nav-item
-          data-nav-row="1"
-          data-nav-col="0"
-        >
-          {isEditMode ? 'Concluído' : 'Gerenciar Perfis'}
-        </button>
-      </div>
+                {profiles.length < 5 && (
+                  <div className="group flex flex-col items-center space-y-3 cursor-pointer">
+                    <button
+                      id="add-profile-btn"
+                      className="w-[120px] h-[120px] rounded-xl overflow-hidden border-2 border-transparent
+                        group-hover:border-white transition-all duration-300 shadow-lg
+                        bg-zinc-800 flex items-center justify-center
+                        focus:outline-none focus-visible:!outline-none
+                        focus-visible:border-white focus-visible:scale-105"
+                      style={{ boxShadow: 'none' }}
+                      data-nav-item
+                      data-profile-btn
+                      data-nav-col={profiles.length}
+                      onClick={() => {
+                        resetForm();
+                        setSelectedProfile(null);
+                        setShowEditModal(true);
+                        playSelectSound();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          resetForm();
+                          setSelectedProfile(null);
+                          setShowEditModal(true);
+                          playSelectSound();
+                        }
+                      }}
+                      onFocus={() => playNavigateSound()}
+                    >
+                      <Plus className="text-3xl text-white/50 group-hover:text-white transition-colors" />
+                    </button>
+                    <span className="text-gray-300 group-hover:text-white text-sm md:text-base font-medium transition-colors whitespace-nowrap">
+                      Adicionar perfil
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Botão Gerenciar Perfis — pill shape */}
+          <div data-nav-row="1">
+            <button
+              className="px-[30px] py-[12px] border border-white/40 hover:border-white hover:bg-white/10
+                text-white/90 text-xs tracking-[2px] uppercase rounded-full transition-all duration-300 font-semibold
+                focus:outline-none focus-visible:!outline-none focus-visible:border-white focus-visible:bg-white/10"
+            onClick={toggleEditMode}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                toggleEditMode();
+              }
+            }}
+            data-nav-item
+            data-nav-col="0"
+          >
+            {isEditMode ? 'Concluído' : 'Gerenciar perfis'}
+            </button>
+          </div>
+        </motion.section>
+      </main>
 
       <AnimatePresence>
         {showPinModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[#18181b] p-8 rounded-xl border border-white/10 max-w-md w-full flex flex-col items-center gap-6 shadow-2xl"
+              className="p-8 rounded-[20px] max-w-md w-full flex flex-col items-center gap-6"
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(15px)',
+                WebkitBackdropFilter: 'blur(15px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+              }}
             >
               <h3 className="text-2xl font-semibold">PIN do Perfil</h3>
               <p className="text-white/60 text-center text-sm">Digite o PIN de 4 dígitos para acessar {selectedProfile?.name}</p>
@@ -370,18 +410,25 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
 
       <AnimatePresence>
         {showEditModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md overflow-y-auto py-10">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md overflow-y-auto py-10">
             <motion.div 
               initial={{ y: 50, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 50, opacity: 0 }}
-              className="bg-[#18181b] w-full max-w-4xl p-8 md:p-12 rounded-2xl border border-white/10 shadow-2xl relative"
+              className="w-full max-w-4xl p-8 md:p-12 rounded-[20px] relative"
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(15px)',
+                WebkitBackdropFilter: 'blur(15px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+              }}
             >
               <button 
                 className="absolute top-6 right-6 text-white/40 hover:text-white p-2"
                 onClick={() => setShowEditModal(false)}
               >
-                <FaTimes size={24} />
+                <X size={24} />
               </button>
 
               <div className="flex flex-col md:flex-row gap-12">
@@ -427,7 +474,7 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <button className="flex items-center gap-4 bg-white/5 p-4 rounded-lg cursor-pointer text-left" onClick={() => setFormData(prev => ({ ...prev, isKids: !prev.isKids }))}>
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${formData.isKids ? 'bg-green-500 text-white' : 'bg-white/10 text-white/30'}`}>
-                        <FaChild size={24} />
+                        <Baby size={24} />
                       </div>
                       <div>
                         <div className="font-semibold">Perfil Kids</div>
@@ -440,7 +487,7 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
 
                     <button className="flex items-center gap-4 bg-white/5 p-4 rounded-lg cursor-pointer text-left" onClick={() => setFormData(prev => ({ ...prev, autoPlayNext: !prev.autoPlayNext }))}>
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center bg-white/10 text-white`}>
-                        <FaCheck size={18} className={formData.autoPlayNext ? 'opacity-100' : 'opacity-0'} />
+                        <Check size={18} className={formData.autoPlayNext ? 'opacity-100' : 'opacity-0'} />
                       </div>
                       <div>
                         <div className="font-semibold">Autoplay</div>
@@ -453,7 +500,7 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
 
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <FaLock className="text-[#E50914]" />
+                      <Lock className="text-[#E50914]" />
                       Controle Parental
                     </h3>
 
@@ -518,7 +565,7 @@ const Profiles: React.FC<ProfilesProps> = ({ onSelect }) => {
                         onClick={handleDeleteProfile}
                         className="ml-auto px-6 py-3 border border-red-900/50 text-red-500 hover:bg-red-900/20 hover:text-red-400 transition-colors rounded flex items-center gap-2"
                       >
-                        <FaTrash /> Excluir
+                        <Trash2 /> Excluir
                       </button>
                     )}
                   </div>

@@ -118,6 +118,7 @@ export class HlsStreamingManager {
     maxBufferHole: 0.5,              // Tolerância de 0.5s para buracos no buffer
 
     // ABR — transição suave de qualidade
+    capLevelToPlayerSize: true,      // Ajusta qualidade ao tamanho real do player (TV Box)
     startLevel: -1,                  // Auto-detect nível inicial
     abrEwmaDefaultEstimate: 500_000, // Estimativa inicial 500Kbps (conservador)
     abrEwmaFastLive: 3,             // Fator de decay rápido

@@ -36,7 +36,7 @@ a:focus-visible,
     box-shadow var(--focus-transition),
     transform var(--focus-transition),
     z-index 0s !important;
-  z-index: 50 !important;
+  z-index: 100 !important;
   position: relative;
 }
 
@@ -53,8 +53,19 @@ a:focus-visible,
   outline-width: var(--focus-outline-width);
   outline-offset: 5px;
   transform: scale(var(--focus-scale));
-  z-index: 60 !important;
+  z-index: 110 !important;
   filter: brightness(1.1);
+}
+
+/* ── MediaCard: contorno de foco segue o formato arredondado do poster ── */
+[data-nav-media-card]:focus-visible {
+  outline: none !important;
+  box-shadow:
+    0 0 0 var(--focus-outline-width) var(--focus-color),
+    0 0 0 calc(var(--focus-outline-width) + 2px) rgba(0, 0, 0, 0.8),
+    0 0 20px var(--focus-glow-color),
+    0 0 60px var(--focus-accent-glow),
+    0 8px 32px rgba(0, 0, 0, 0.4) !important;
 }
 
 /* ── Hover equivalente (para mouse, se presente) ── */
@@ -194,6 +205,12 @@ a:focus:not(:focus-visible),
 @keyframes trap-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* ═══ BANNER PROGRESS BAR ═══ */
+@keyframes banner-progress {
+  from { width: 0%; }
+  to { width: 100%; }
 }
 
 :root {

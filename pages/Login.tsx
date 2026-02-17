@@ -16,10 +16,15 @@ const Login: React.FC<{ onLogin: () => void; onAdminAccess?: () => void }> = ({ 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setError("Preencha e-mail e senha");
+      return;
+    }
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(email, password);
+      const { error } = await signIn(trimmedEmail, password);
       if (error) {
         setError("Falha ao entrar: " + error);
         setIsLoading(false);
@@ -56,9 +61,12 @@ const Login: React.FC<{ onLogin: () => void; onAdminAccess?: () => void }> = ({ 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'ArrowDown') { e.preventDefault(); setPosition(0, 1); }
-                    if (e.key === 'Enter') { e.preventDefault(); setPosition(0, 1); }
+                    // ArrowLeft, ArrowRight, Backspace, Enter: deixar para edição/teclado virtual
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Backspace' || e.key === 'Enter') return;
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setPosition(0, 1); (document.querySelector('[data-nav-col="1"]') as HTMLElement)?.focus(); }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); }
                   }}
+                  onFocus={() => setPosition(0, 0)}
                   placeholder="seuemail@exemplo.com"
                   className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-5 text-sm focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all text-white placeholder-white/20"
                   data-nav-item
@@ -76,10 +84,12 @@ const Login: React.FC<{ onLogin: () => void; onAdminAccess?: () => void }> = ({ 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'ArrowUp') { e.preventDefault(); setPosition(0, 0); }
-                    if (e.key === 'ArrowDown') { e.preventDefault(); setPosition(0, 2); }
-                    if (e.key === 'Enter') { e.preventDefault(); (document.getElementById('login-submit') as HTMLButtonElement)?.click(); }
+                    // ArrowLeft, ArrowRight, Backspace, Enter: deixar para edição/teclado virtual
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Backspace' || e.key === 'Enter') return;
+                    if (e.key === 'ArrowUp') { e.preventDefault(); setPosition(0, 0); (document.querySelector('[data-nav-col="0"]') as HTMLElement)?.focus(); }
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setPosition(0, 2); (document.getElementById('login-submit') as HTMLElement)?.focus(); }
                   }}
+                  onFocus={() => setPosition(0, 1)}
                   placeholder="••••••••"
                   className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-12 text-sm focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all text-white placeholder-white/20"
                   data-nav-item

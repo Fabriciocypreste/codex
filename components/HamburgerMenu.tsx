@@ -67,7 +67,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ currentPage, onNavigate, 
             <div className="fixed top-6 left-6 z-[101] pointer-events-none flex items-center h-[50px]">
                 <img
                     src="/logored.png"
-                    alt="REDX"
+                    alt="Redflix"
                     className="h-7 w-auto object-contain drop-shadow-[0_0_15px_rgba(229,9,20,0.3)] ml-14"
                 />
             </div>

@@ -27,7 +27,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate, profil
         {/* Logo REDX */}
         <img
           src="/logored.png"
-          alt="REDX"
+          alt="Redflix"
           className="h-6 w-auto object-contain drop-shadow-md cursor-pointer hover:scale-105 transition-transform"
           onClick={() => onNavigate(Page.HOME)}
         />
@@ -75,7 +75,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate, profil
           data-nav-item
           data-nav-col={navItems.length + 1}
         >
-          <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
+          <img src={profile?.avatar || '/logored.png'} alt={profile?.name || 'Perfil'} className="w-full h-full object-cover" />
         </button>
       </div>
     </nav>

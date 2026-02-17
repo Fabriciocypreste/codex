@@ -275,22 +275,80 @@ export async function deleteM3USource(id: string): Promise<boolean> {
 }
 
 export async function getChannelsAdmin(): Promise<any[]> {
-  const { data, error } = await supabase
+  // Try English column name first (schema standard), fallback to Portuguese
+  let { data, error } = await supabase
     .from('channels')
     .select('*')
-    .order('nome', { ascending: true });
+    .order('name', { ascending: true });
+  if (error) {
+    // Fallback: try Portuguese column name
+    const res = await supabase.from('channels').select('*').order('nome', { ascending: true });
+    data = res.data;
+    error = res.error;
+  }
   if (error) return [];
-  return data || [];
+  // Normalize: ensure both naming conventions are available
+  return (data || []).map((c: any) => ({
+    ...c,
+    nome: c.nome || c.name || '',
+    name: c.name || c.nome || '',
+    logo: c.logo || c.logo_url || '',
+    genero: c.genero || c.category || '',
+    category: c.category || c.genero || '',
+    url: c.url || c.stream_url || '',
+    stream_url: c.stream_url || c.url || '',
+  }));
 }
 
 export async function createChannel(channel: any): Promise<any> {
-  const { data, error } = await supabase.from('channels').insert(channel).select().maybeSingle();
+  // Normalize to English column names (DB schema standard)
+  const normalized: any = {
+    name: channel.name || channel.nome || '',
+    logo: channel.logo || '',
+    category: channel.category || channel.genero || '',
+    stream_url: channel.stream_url || channel.url || '',
+  };
+  if (channel.number != null) normalized.number = channel.number;
+  if (channel.is_premium != null) normalized.is_premium = channel.is_premium;
+
+  let { data, error } = await supabase.from('channels').insert(normalized).select().maybeSingle();
+  if (error) {
+    // Fallback: try Portuguese column names
+    const ptNormalized: any = {
+      nome: channel.nome || channel.name || '',
+      logo: channel.logo || '',
+      genero: channel.genero || channel.category || '',
+      url: channel.url || channel.stream_url || '',
+    };
+    const res = await supabase.from('channels').insert(ptNormalized).select().maybeSingle();
+    data = res.data;
+    error = res.error;
+  }
   if (error) { console.error('Erro ao criar canal:', error); return null; }
   return data;
 }
 
 export async function updateChannel(id: string, updates: any): Promise<boolean> {
-  const { error } = await supabase.from('channels').update(updates).eq('id', id);
+  // Normalize to English column names (DB schema standard)
+  const normalized: any = {};
+  if (updates.name || updates.nome) normalized.name = updates.name || updates.nome;
+  if (updates.logo !== undefined) normalized.logo = updates.logo;
+  if (updates.category || updates.genero) normalized.category = updates.category || updates.genero;
+  if (updates.stream_url || updates.url) normalized.stream_url = updates.stream_url || updates.url;
+  if (updates.number != null) normalized.number = updates.number;
+  if (updates.is_premium != null) normalized.is_premium = updates.is_premium;
+
+  let { error } = await supabase.from('channels').update(normalized).eq('id', id);
+  if (error) {
+    // Fallback: try Portuguese column names
+    const ptNormalized: any = {};
+    if (updates.nome || updates.name) ptNormalized.nome = updates.nome || updates.name;
+    if (updates.logo !== undefined) ptNormalized.logo = updates.logo;
+    if (updates.genero || updates.category) ptNormalized.genero = updates.genero || updates.category;
+    if (updates.url || updates.stream_url) ptNormalized.url = updates.url || updates.stream_url;
+    const res = await supabase.from('channels').update(ptNormalized).eq('id', id);
+    error = res.error;
+  }
   return !error;
 }
 

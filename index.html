@@ -3,18 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>REDX | Spatial Streaming</title>
+    <title>Redflix | Spatial Streaming</title>
+    <!-- TV Box: D-pad bridge - MainActivity.injectKey calls this -->
+    <script>
+      (function(){
+        var m={ArrowUp:38,ArrowDown:40,ArrowLeft:37,ArrowRight:39,Enter:13,Escape:27,Backspace:8,' ':32,Menu:0};
+        for(var i=0;i<=9;i++)m[''+i]=48+i;
+        
+        window.__dispatchTVKey__=function(k){
+          var key=(k===' '||k==='Space')?' ':(k||'');
+          var c=m[key]||0;
+          var codeStr=key===' '?'Space':(key.indexOf('Arrow')===0||key==='Enter'||key==='Escape'||key==='Backspace'||key==='Tab'?key:'Key'+key);
+          var el=document.activeElement;
+          var inInput=el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable);
+          var isFocusable=el&&(el.tagName==='BUTTON'||el.tagName==='A'||el.hasAttribute('tabindex')||el.hasAttribute('data-nav-item'));
+          try{
+            var opts={key:key,code:codeStr,keyCode:c,which:c,bubbles:true,cancelable:true,composed:true};
+            if(inInput){
+              el.dispatchEvent(new KeyboardEvent('keydown',opts));
+            }else if(isFocusable){
+              var ev=new KeyboardEvent('keydown',opts);
+              el.dispatchEvent(ev);
+              if(key==='Enter'&&(el.tagName==='BUTTON'||el.tagName==='A')) el.click();
+              if(!ev.defaultPrevented) window.dispatchEvent(new KeyboardEvent('keydown',opts));
+            }else{
+              window.dispatchEvent(new KeyboardEvent('keydown',opts));
+            }
+          }catch(e){
+            try{var ev2=document.createEvent('Event');ev2.initEvent('keydown',true,true);ev2.key=key;ev2.keyCode=c;ev2.which=c;window.dispatchEvent(ev2);}catch(e3){}
+          }
+          // Debug overlay removido para produção
+        };
+        window.__canExitApp=false;
+      })();
+    </script>
     <!-- Removed Tailwind CDN to fix production error -->
     <!-- FontAwesome was also causing issues, relying on Lucide React now -->
+    <!-- Google Fonts: preload non-blocking (evita render-blocking) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
         body {
             font-family: 'Inter', sans-serif;
             background-color: #0B0B0F;
             color: #ffffff;
             margin: 0;
             overflow-x: hidden;
+            overflow-y: auto;
+            min-height: 100vh;
             -webkit-font-smoothing: antialiased;
         }
 
@@ -71,7 +109,6 @@
 </head>
 <body>
     <div id="root"></div>
-    <!-- Adjusted path to point to root index.tsx -->
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>

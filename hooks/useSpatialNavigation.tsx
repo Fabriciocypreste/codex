@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
 import { playNavigateSound, playSelectSound, playBackSound, playErrorSound, initAudio } from '../utils/soundEffects';
-import { shouldProcessNavEvent, resetNavDebounce } from '../utils/dpadDebounce';
+import { shouldProcessNavEvent, shouldProcessVerticalNavEvent, resetNavDebounce } from '../utils/dpadDebounce';
 import { scrollToFocusedElement, scrollRowToElement } from '../utils/tvScroll';
 
 /* ============================================================
@@ -74,6 +74,8 @@ interface SpatialNavContextType {
   circularEnabled: boolean;
   /** Profundidade atual do focus trap stack */
   focusTrapDepth: number;
+  /** TV Box: foca o primeiro item da primeira row (chamar ao trocar de página) */
+  focusToFirstRow: () => void;
 }
 
 const SpatialNavContext = createContext<SpatialNavContextType>({
@@ -96,6 +98,7 @@ const SpatialNavContext = createContext<SpatialNavContextType>({
   circularV: false,
   circularEnabled: false,
   focusTrapDepth: 0,
+  focusToFirstRow: () => {},
 });
 
 export const useSpatialNav = () => useContext(SpatialNavContext);
@@ -179,6 +182,27 @@ function getAllFocusables(container?: HTMLElement | null): FocusableElement[] {
       row,
       col,
       group,
+    });
+  });
+  return elements;
+}
+
+function getFocusablesNearRow(currentRow: number, rows: number[], container?: HTMLElement | null): FocusableElement[] {
+  const root = container || document;
+  const ridx = rows.indexOf(currentRow);
+  const nearbyRows = new Set<number>();
+  for (let i = Math.max(0, ridx - 2); i <= Math.min(rows.length - 1, ridx + 2); i++) {
+    nearbyRows.add(rows[i]);
+  }
+  const elements: FocusableElement[] = [];
+  nearbyRows.forEach(r => {
+    const rowEl = root.querySelector(`[data-nav-row="${r}"]`);
+    if (!rowEl) return;
+    rowEl.querySelectorAll('[data-nav-item]').forEach(el => {
+      const htmlEl = el as HTMLElement;
+      const col = parseInt(htmlEl.getAttribute('data-nav-col') || '0');
+      const group = htmlEl.closest('[data-nav-group]')?.getAttribute('data-nav-group') || undefined;
+      elements.push({ el: htmlEl, rect: htmlEl.getBoundingClientRect(), row: r, col, group });
     });
   });
   return elements;
@@ -312,7 +336,31 @@ function hideFocusIndicator(): void {
 
 function focusDomElement(row: number, col: number, container?: HTMLElement | null): number {
   const items = getItemsInRow(row, container);
-  if (items.length === 0) return col;
+  if (items.length === 0) {
+    // TV Box: row existe mas itens não renderizados (lazy rendering)
+    // Tenta forçar scroll até o row element para triggerar IntersectionObserver
+    const root = container || document;
+    const rowEl = root.querySelector(`[data-nav-row="${row}"]`) as HTMLElement;
+    if (rowEl) {
+      rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Retry focus após 150ms (tempo para lazy rendering ativar)
+      setTimeout(() => {
+        const retryItems = getItemsInRow(row, container);
+        if (retryItems.length > 0) {
+          const safeCol = Math.max(0, Math.min(col, retryItems.length - 1));
+          const el = retryItems[safeCol];
+          if (el) {
+            el.focus({ preventScroll: true });
+            const scrollContainer = el.closest('[data-nav-scroll]') as HTMLElement;
+            if (scrollContainer) scrollRowToElement(scrollContainer, el);
+            scrollToFocusedElement(el);
+            createRipple(el);
+          }
+        }
+      }, 150);
+    }
+    return col;
+  }
   const safeCol = Math.max(0, Math.min(col, items.length - 1));
   const el = items[safeCol];
   if (el) {
@@ -540,7 +588,8 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
 
     const handler = (e: KeyboardEvent) => {
       if (!enabledRef.current) return;
-      if (!shouldProcessNavEvent()) return;
+      const isVertical = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+      if (isVertical ? !shouldProcessVerticalNavEvent() : !shouldProcessNavEvent()) return;
 
       if (!audioInitialized) {
         initAudio();
@@ -569,6 +618,19 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
       const c = colRef.current;
       const ridx = rows.indexOf(r);
 
+      // Teclas numéricas 1–9: pular ao item 1–9 da row atual (TV Box / players IPTV)
+      if (e.key >= '1' && e.key <= '9') {
+        const num = parseInt(e.key, 10);
+        const items = getItemsInRow(r, container);
+        const idx = num - 1;
+        if (idx >= 0 && items.length > idx) {
+          e.preventDefault();
+          setPosition(r, idx);
+          playNavigateSound();
+        }
+        return;
+      }
+
       // ── Resolver wrap config: atributo da row > global ──
       // data-nav-wrap-h / data-nav-wrap-v / data-nav-wrap no elemento da row
       // prevalecem sobre a config global (circularHRef / circularVRef)
@@ -593,7 +655,7 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
             playNavigateSound();
           } else {
             // Fallback: algoritmo espacial por proximidade
-            const allItems = getAllFocusables(container);
+            const allItems = getFocusablesNearRow(r, rows, container);
             const currentItems = getItemsInRow(r, container);
             const currentEl = currentItems[Math.min(c, currentItems.length - 1)];
             if (currentEl) {
@@ -623,7 +685,7 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
             setPosition(rows[0], 0);
             playNavigateSound();
           } else {
-            const allItems = getAllFocusables(container);
+            const allItems = getFocusablesNearRow(r, rows, container);
             const currentItems = getItemsInRow(r, container);
             const currentEl = currentItems[Math.min(c, currentItems.length - 1)];
             if (currentEl) {
@@ -649,7 +711,7 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
             setPosition(r, items.length - 1);
             playNavigateSound();
           } else {
-            const allItems = getAllFocusables(container);
+            const allItems = getFocusablesNearRow(r, rows, container);
             const currentEl = items[0];
             if (currentEl) {
               const nearest = findNearestInDirection(
@@ -674,7 +736,7 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
             setPosition(r, 0);
             playNavigateSound();
           } else {
-            const allItems = getAllFocusables(container);
+            const allItems = getFocusablesNearRow(r, rows, container);
             const currentEl = items[items.length - 1];
             if (currentEl) {
               const nearest = findNearestInDirection(
@@ -709,15 +771,25 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
     return () => window.removeEventListener('keydown', handler);
   }, [setPosition, getActiveContainer, getGroups, nextFocusGroup, prevFocusGroup, popFocusTrap]);
 
-  // Foco inicial
+  // Foco inicial (TV Box: retry para quando a Home/Login ainda está renderizando)
   useEffect(() => {
-    const t = setTimeout(() => {
+    const tryFocus = () => {
+      if (savedRef.current['__initial_done']) return;
       const rows = getAllRows();
-      if (rows.length > 0 && !savedRef.current['__initial_done']) {
-        setPosition(rows[0], 0);
-      }
-    }, 200);
-    return () => clearTimeout(t);
+      if (rows.length === 0) return;
+      const active = document.activeElement as HTMLElement;
+      if (active?.hasAttribute('data-nav-item')) return; // já tem foco em um item
+      setPosition(rows[0], 0);
+      savedRef.current['__initial_done'] = { row: -1, col: -1 };
+    };
+    const t1 = setTimeout(tryFocus, 200);
+    const t2 = setTimeout(tryFocus, 600);
+    const t3 = setTimeout(tryFocus, 1200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, [setPosition]);
 
   // Atualizar indicador no scroll/resize
@@ -734,6 +806,16 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
     };
   }, []);
 
+  // TV Box: foca a primeira row (usar ao trocar de página)
+  const focusToFirstRow = useCallback(() => {
+    delete savedRef.current['__initial_done'];
+    requestAnimationFrame(() => {
+      const container = getActiveContainer();
+      const rows = getAllRows(container);
+      if (rows.length > 0) setPosition(rows[0], 0);
+    });
+  }, [getActiveContainer, setPosition]);
+
   // Cleanup indicador
   useEffect(() => {
     return () => {
@@ -746,7 +828,7 @@ export const SpatialNavProvider: React.FC<SpatialNavProviderProps> = ({ children
       focusedRow, focusedCol, setPosition, savePosition, restorePosition, setEnabled,
       pushFocusTrap, popFocusTrap, nextFocusGroup, prevFocusGroup, skipToSection,
       triggerRipple, setCircularNav, setCircularH, setCircularV,
-      circularH, circularV, circularEnabled, focusTrapDepth,
+      circularH, circularV, circularEnabled, focusTrapDepth, focusToFirstRow,
     }}>
       {children}
     </SpatialNavContext.Provider>

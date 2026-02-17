@@ -1,9 +1,112 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Media } from '../types';
 import MediaRow from '../components/MediaRow';
 import HeroBanner from '../components/HeroBanner';
 import StreamingPlatforms, { platforms } from '../components/StreamingPlatforms';
 import { Film, Tv } from 'lucide-react';
+
+const ROW_HEIGHT = 320;
+const VISIBLE_BUFFER = 3;
+
+function useRowWindowing(totalRows: number) {
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: VISIBLE_BUFFER * 2 });
+
+  useEffect(() => {
+    const handler = () => {
+      const scrollY = window.scrollY;
+      const viewportH = window.innerHeight;
+      const heroOffset = 600;
+      const startRow = Math.max(0, Math.floor((scrollY - heroOffset) / ROW_HEIGHT) - VISIBLE_BUFFER);
+      const endRow = Math.min(totalRows - 1, Math.ceil((scrollY + viewportH - heroOffset) / ROW_HEIGHT) + VISIBLE_BUFFER);
+      setVisibleRange(prev => {
+        if (prev.start === startRow && prev.end === endRow) return prev;
+        return { start: startRow, end: endRow };
+      });
+    };
+    window.addEventListener('scroll', handler, { passive: true });
+    handler();
+    return () => window.removeEventListener('scroll', handler);
+  }, [totalRows]);
+
+  return visibleRange;
+}
+
+interface RowDescriptor {
+  key: string;
+  title: string;
+  items: Media[];
+  rowIndex: number;
+  type: 'row' | 'header';
+  headerIcon?: 'film' | 'tv';
+}
+
+const CatalogRows: React.FC<{
+  recentlyAdded: Media[];
+  trendingMovies: Media[];
+  trendingSeries: Media[];
+  movieGenreEntries: [string, Media[]][];
+  seriesGenreEntries: [string, Media[]][];
+  movieGenreStartRow: number;
+  seriesGenreStartRow: number;
+  RECENTLY_ADDED_ROW: number;
+  TRENDING_MOVIES_ROW: number;
+  TRENDING_SERIES_ROW: number;
+  onSelect: (m: Media) => void;
+  onPlay?: (m: Media) => void;
+}> = React.memo(({
+  recentlyAdded, trendingMovies, trendingSeries,
+  movieGenreEntries, seriesGenreEntries,
+  movieGenreStartRow, seriesGenreStartRow,
+  RECENTLY_ADDED_ROW, TRENDING_MOVIES_ROW, TRENDING_SERIES_ROW,
+  onSelect, onPlay,
+}) => {
+  const allRows = useMemo(() => {
+    const rows: RowDescriptor[] = [];
+    if (recentlyAdded.length > 0) rows.push({ key: 'recent', title: 'Recem Adicionados', items: recentlyAdded, rowIndex: RECENTLY_ADDED_ROW, type: 'row' });
+    if (trendingMovies.length > 0) rows.push({ key: 'trend-movies', title: 'Filmes em Alta', items: trendingMovies, rowIndex: TRENDING_MOVIES_ROW, type: 'row' });
+    rows.push({ key: 'header-films', title: 'Filmes', items: [], rowIndex: -1, type: 'header', headerIcon: 'film' });
+    movieGenreEntries.forEach(([genre, items], idx) => rows.push({ key: `movie-${genre}`, title: genre, items, rowIndex: movieGenreStartRow + idx, type: 'row' }));
+    if (trendingSeries.length > 0) rows.push({ key: 'trend-series', title: 'Series em Alta', items: trendingSeries, rowIndex: TRENDING_SERIES_ROW, type: 'row' });
+    rows.push({ key: 'header-series', title: 'Series', items: [], rowIndex: -1, type: 'header', headerIcon: 'tv' });
+    seriesGenreEntries.forEach(([genre, items], idx) => rows.push({ key: `series-${genre}`, title: genre, items, rowIndex: seriesGenreStartRow + idx, type: 'row' }));
+    return rows;
+  }, [recentlyAdded, trendingMovies, trendingSeries, movieGenreEntries, seriesGenreEntries, movieGenreStartRow, seriesGenreStartRow, RECENTLY_ADDED_ROW, TRENDING_MOVIES_ROW, TRENDING_SERIES_ROW]);
+
+  const { start, end } = useRowWindowing(allRows.length);
+
+  return (
+    <>
+      {allRows.map((row, idx) => {
+        const isVisible = idx >= start && idx <= end;
+        if (row.type === 'header') {
+          const Icon = row.headerIcon === 'film' ? Film : Tv;
+          return (
+            <div key={row.key} className="px-12 pt-8">
+              <div className="flex items-center gap-4 mb-2">
+                <Icon className="w-6 h-6 text-[#E50914]" />
+                <h2 className="text-3xl font-black tracking-tight">{row.title}</h2>
+                <div className="h-0.5 flex-1 bg-linear-to-r from-[#E50914]/30 to-transparent" />
+              </div>
+            </div>
+          );
+        }
+        if (!isVisible) {
+          return <div key={row.key} style={{ height: `${ROW_HEIGHT}px` }} data-nav-row={row.rowIndex} />;
+        }
+        return (
+          <MediaRow
+            key={row.key}
+            title={row.title}
+            items={row.items}
+            onSelect={onSelect}
+            onPlay={onPlay}
+            rowIndex={row.rowIndex}
+          />
+        );
+      })}
+    </>
+  );
+});
 
 interface HomeProps {
   movies: Media[];
@@ -25,6 +128,11 @@ const Home: React.FC<HomeProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [filter, setFilter] = useState<string | null>(null);
+  const [bgBackdrop, setBgBackdrop] = useState<string>('');
+  const bgRef = useRef<HTMLDivElement>(null);
+
+  // Callback estável para o HeroBanner informar o backdrop atual
+  const handleBackdropChange = useCallback((url: string) => setBgBackdrop(url), []);
 
   // Banner usa trending TMDB (posters oficiais garantidos)
   const featuredList = useMemo(() => [...trendingMovies, ...trendingSeries].slice(0, 12), [trendingMovies, trendingSeries]);
@@ -45,13 +153,33 @@ const Home: React.FC<HomeProps> = ({
     setCurrentIndex(0);
   }, [featuredList.length]);
 
-  // Busca filtra no conteúdo real do DB
+  // Mapeamento de nomes do componente → nomes reais no DB (parcial, case-insensitive)
+  const platformAliases: Record<string, string[]> = useMemo(() => ({
+    'Netflix': ['netflix'],
+    'Prime Video': ['amazon prime video', 'prime video', 'amazon video'],
+    'Disney+': ['disney plus', 'disney+'],
+    'Max': ['hbo max', 'max'],
+    'Globoplay': ['globoplay'],
+    'Apple TV+': ['apple tv', 'apple tv+', 'apple tv store'],
+    'Paramount+': ['paramount plus', 'paramount+'],
+    'HBO Max': ['hbo max'],
+    'Pluto TV': ['pluto tv'],
+    'Crunchyroll': ['crunchyroll'],
+    'Claro Video': ['claro video', 'claro tv'],
+    'Warner Bros': ['warner'],
+  }), []);
+
+  // Busca filtra no conteúdo real do DB — agora filtra pelo campo `platform`
   const allContent = useMemo(() => [...movies, ...series], [movies, series]);
-  const filteredMedia = useMemo(() => filter
-    ? allContent.filter(m =>
-      m.title.toLowerCase().includes(filter.toLowerCase())
-    )
-    : null, [allContent, filter]);
+  const filteredMedia = useMemo(() => {
+    if (!filter) return null;
+    const aliases = platformAliases[filter] || [filter.toLowerCase()];
+    return allContent.filter(m => {
+      if (!m.platform) return false;
+      const p = m.platform.toLowerCase();
+      return aliases.some(alias => p.includes(alias));
+    });
+  }, [allContent, filter, platformAliases]);
 
   const handleSelectMedia = useCallback((m: Media) => onSelectMedia(m), [onSelectMedia]);
 
@@ -71,10 +199,30 @@ const Home: React.FC<HomeProps> = ({
 
   return (
     <div className="w-full space-y-4 pb-20 animate-fade-in relative">
+      {/* === FUNDO DA PÁGINA: backdrop do banner com 60% blur === */}
+      {bgBackdrop && (
+        <div
+          ref={bgRef}
+          className="fixed inset-0 w-screen h-screen z-[-1] transition-opacity duration-700"
+        >
+          <img
+            src={bgBackdrop}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{
+              filter: 'brightness(0.4)',
+              transform: 'scale(1.15)',
+            }}
+          />
+          {/* Overlay escuro para garantir contraste */}
+          <div className="absolute inset-0 bg-black/50" />
+        </div>
+      )}
+
       {/* Hero Banner */}
       {!filter && (
         <div className="mt-0 relative z-0">
-          <HeroBanner onPlayMedia={onPlayMedia} onSelectMedia={onSelectMedia} dbMedia={[...movies, ...series]} />
+          <HeroBanner onPlayMedia={onPlayMedia} onSelectMedia={onSelectMedia} dbMedia={allContent} onBackdropChange={handleBackdropChange} />
         </div>
       )}
 
@@ -133,82 +281,20 @@ const Home: React.FC<HomeProps> = ({
 
         {/* Catálogo Real do Banco de Dados - organizado por gênero */}
         {!filter && (
-          <>
-            {/* Recém Adicionados - conteúdo com stream_url (inserido via admin) */}
-            {recentlyAdded.length > 0 && (
-              <MediaRow
-                title="⭐ Recém Adicionados"
-                items={recentlyAdded}
-                onSelect={handleSelectMedia}
-                onPlay={onPlayMedia}
-                rowIndex={RECENTLY_ADDED_ROW}
-              />
-            )}
-
-            {/* Trending TMDB */}
-            {trendingMovies.length > 0 && (
-              <MediaRow
-                title="🔥 Filmes em Alta"
-                items={trendingMovies}
-                onSelect={handleSelectMedia}
-                onPlay={onPlayMedia}
-                rowIndex={TRENDING_MOVIES_ROW}
-              />
-            )}
-
-            {/* FILMES do Banco - por Gênero (enriquecidos com TMDB) */}
-            <div className="px-12 pt-8">
-              <div className="flex items-center gap-4 mb-2">
-                <Film className="w-6 h-6 text-[#E50914]" />
-                <h2 className="text-3xl font-black tracking-tight">Filmes</h2>
-                <div className="h-0.5 flex-1 bg-linear-to-r from-[#E50914]/30 to-transparent" />
-              </div>
-            </div>
-
-            {Array.from(moviesByGenre.entries()).map(([genre, items], idx) => (
-              <MediaRow
-                key={`movie-${genre}`}
-                title={genre}
-                items={items}
-                onSelect={handleSelectMedia}
-                onPlay={onPlayMedia}
-                rowIndex={movieGenreStartRow + idx}
-              />
-            ))}
-
-            {/* Trending Séries */}
-            {trendingSeries.length > 0 && (
-              <div className="pt-4">
-                <MediaRow
-                  title="🔥 Séries em Alta"
-                  items={trendingSeries}
-                  onSelect={handleSelectMedia}
-                  onPlay={onPlayMedia}
-                  rowIndex={TRENDING_SERIES_ROW}
-                />
-              </div>
-            )}
-
-            {/* SÉRIES do Banco - por Gênero (enriquecidas com TMDB) */}
-            <div className="px-12 pt-8">
-              <div className="flex items-center gap-4 mb-2">
-                <Tv className="w-6 h-6 text-[#E50914]" />
-                <h2 className="text-3xl font-black tracking-tight">Séries</h2>
-                <div className="h-0.5 flex-1 bg-linear-to-r from-[#E50914]/30 to-transparent" />
-              </div>
-            </div>
-
-            {Array.from(seriesByGenre.entries()).map(([genre, items], idx) => (
-              <MediaRow
-                key={`series-${genre}`}
-                title={genre}
-                items={items}
-                onSelect={handleSelectMedia}
-                onPlay={onPlayMedia}
-                rowIndex={seriesGenreStartRow + idx}
-              />
-            ))}
-          </>
+          <CatalogRows
+            recentlyAdded={recentlyAdded}
+            trendingMovies={trendingMovies}
+            trendingSeries={trendingSeries}
+            movieGenreEntries={movieGenreEntries}
+            seriesGenreEntries={seriesGenreEntries}
+            movieGenreStartRow={movieGenreStartRow}
+            seriesGenreStartRow={seriesGenreStartRow}
+            RECENTLY_ADDED_ROW={RECENTLY_ADDED_ROW}
+            TRENDING_MOVIES_ROW={TRENDING_MOVIES_ROW}
+            TRENDING_SERIES_ROW={TRENDING_SERIES_ROW}
+            onSelect={handleSelectMedia}
+            onPlay={onPlayMedia}
+          />
         )}
       </div>
     </div>

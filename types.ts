@@ -28,10 +28,13 @@ export interface Media {
 }
 
 export interface Channel {
-  nome: string;
+  id?: string;
+  name: string;
   logo: string;
-  genero: string;
-  url: string;
+  category: string;
+  stream_url: string;
+  number?: number;
+  is_premium?: boolean;
 }
 
 export interface UserProfile {
@@ -52,6 +55,7 @@ export interface UserProfile {
 export enum Page {
   LOGIN = 'LOGIN',
   PROFILES = 'PROFILES',
+  PLANS = 'PLANS',
   HOME = 'HOME',
   MOVIES = 'MOVIES',
   SERIES = 'SERIES',

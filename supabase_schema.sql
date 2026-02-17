@@ -182,33 +182,10 @@ CREATE TABLE IF NOT EXISTS public.uploads (
 );
 
 -- ============================================
--- TABELA: watchlist (Lista de favoritos)
+-- NOTA: As tabelas legadas 'watchlist' e 'watch_history' foram
+-- removidas e unificadas em 'user_library' e 'watch_progress'.
+-- Ver: supabase/migrations/unify_watchlist_tables.sql
 -- ============================================
-CREATE TABLE IF NOT EXISTS public.watchlist (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    profile_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
-    content_type TEXT NOT NULL, -- 'movie', 'series'
-    content_id UUID NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, profile_id, content_type, content_id)
-);
-
--- ============================================
--- TABELA: watch_history (Histórico de visualização)
--- ============================================
-CREATE TABLE IF NOT EXISTS public.watch_history (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    profile_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
-    content_type TEXT NOT NULL, -- 'movie', 'series', 'channel'
-    content_id UUID NOT NULL,
-    progress INTEGER DEFAULT 0, -- em segundos
-    total_duration INTEGER, -- em segundos
-    last_watched TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
 
 -- ============================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -225,8 +202,7 @@ ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.uploads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.watchlist ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.watch_history ENABLE ROW LEVEL SECURITY;
+-- watchlist e watch_history removidas (unificadas em user_library / watch_progress)
 
 -- Policies para movies (público pode ler, apenas autenticados)
 CREATE POLICY "Movies são visíveis para usuários autenticados"
@@ -358,23 +334,7 @@ CREATE POLICY "Usuários podem deletar seus próprios uploads"
     ON public.uploads FOR DELETE
     USING (auth.uid() = user_id);
 
--- Policies para watchlist
-CREATE POLICY "Usuários podem ver sua própria watchlist"
-    ON public.watchlist FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Usuários podem gerenciar sua própria watchlist"
-    ON public.watchlist FOR ALL
-    USING (auth.uid() = user_id);
-
--- Policies para watch_history
-CREATE POLICY "Usuários podem ver seu próprio histórico"
-    ON public.watch_history FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Usuários podem gerenciar seu próprio histórico"
-    ON public.watch_history FOR ALL
-    USING (auth.uid() = user_id);
+-- Policies de watchlist/watch_history removidas (unificadas em user_library/watch_progress)
 
 -- ============================================
 -- ÍNDICES PARA PERFORMANCE
@@ -389,9 +349,7 @@ CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user_id ON public.user_subscri
 CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status ON public.user_subscriptions(status);
 CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON public.user_profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON public.user_devices(user_id);
-CREATE INDEX IF NOT EXISTS idx_watchlist_user_id ON public.watchlist(user_id);
-CREATE INDEX IF NOT EXISTS idx_watch_history_user_id ON public.watch_history(user_id);
-CREATE INDEX IF NOT EXISTS idx_watch_history_content ON public.watch_history(content_type, content_id);
+-- Índices de watchlist/watch_history removidos (ver user_library/watch_progress)
 
 -- ============================================
 -- FUNÇÕES E TRIGGERS
@@ -437,7 +395,9 @@ CREATE TRIGGER update_payment_methods_updated_at BEFORE UPDATE ON public.payment
 CREATE TRIGGER update_uploads_updated_at BEFORE UPDATE ON public.uploads
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_watch_history_updated_at BEFORE UPDATE ON public.watch_history
+-- Trigger update_watch_history_updated_at removido (tabela legada eliminada)
+
+CREATE TRIGGER update_watch_progress_updated_at BEFORE UPDATE ON public.watch_progress
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================

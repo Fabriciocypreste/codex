@@ -45,7 +45,12 @@ const getSupabaseClient = (): SupabaseClient => {
   }
 
   const client = createClient(supabaseUrl!, supabaseAnonKey!, {
-    // Optional: ajustes adicionais, ex: auth: { persistSession: false } dependendo do app
+    auth: {
+      persistSession: true,       // Manter sessão no localStorage (TV Box APK não perde login)
+      autoRefreshToken: true,     // Renovar token automaticamente antes de expirar
+      detectSessionInUrl: false,  // Desabilitar para Capacitor/APK (não há URL callback)
+      storageKey: 'redx-auth',   // Chave consistente no localStorage
+    },
   });
 
   if (typeof globalThis !== 'undefined') {
@@ -57,11 +62,37 @@ const getSupabaseClient = (): SupabaseClient => {
 
 export const supabase = getSupabaseClient();
 
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') {
+    console.log('[Supabase] Token refreshed successfully');
+  }
+  if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
+    console.warn('[Supabase] Session lost, user signed out');
+  }
+});
+
+export async function ensureValidSession(): Promise<boolean> {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        console.warn('[Supabase] Session expired, redirecting to login');
+        window.location.hash = '#/login';
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /* ---------- Interfaces (mantidas) ---------- */
 // (Colei suas interfaces sem alteração para brevidade)
 export interface Movie { id: string; tmdb_id?: number; title: string; description?: string; poster?: string; backdrop?: string; logo_url?: string; year?: number; rating?: number; genre?: string[]; stream_url?: string; trailer_url?: string; use_trailer?: boolean; platform?: string; status?: 'published' | 'draft'; created_at?: string; }
 export interface Series { id: string; tmdb_id?: number; title: string; description?: string; poster?: string; backdrop?: string; logo_url?: string; year?: number; rating?: number; genre?: string[]; stream_url?: string; trailer_url?: string; use_trailer?: boolean; platform?: string; status?: 'published' | 'draft'; seasons_count?: number; created_at?: string; }
-export interface Channel { id: string; nome: string; logo?: string; genero?: string; url: string; }
+export interface Channel { id: string; name: string; logo?: string; category?: string; stream_url: string; number?: number; is_premium?: boolean; }
 export interface Season { id: string; series_id: string; season_number: number; title?: string; description?: string; poster?: string; }
 export interface Episode { id: string; season_id: string; episode_number: number; title: string; description?: string; duration?: string; stream_url?: string; thumbnail?: string; }
 export interface UserSettings { id: string; user_id: string; email: string; name: string; phone?: string; two_factor_enabled: boolean; }
@@ -76,10 +107,28 @@ export interface AppConfig { id: string; logo_url: string; primary_color: string
 
 /* ---------- Funções (mantidas, com pequenos ajustes de segurança/tratamento) ---------- */
 
+// Helper: buscar TODOS os registros (Supabase limita a 1000 por request)
+async function fetchAllRows<T>(table: string, orderCol = 'created_at'): Promise<T[]> {
+  const PAGE = 1000;
+  const all: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .order(orderCol, { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...(data as T[]));
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
 export async function getAllMovies(): Promise<Movie[]> {
-  const { data, error } = await supabase.from('movies').select('*').order('created_at', { ascending: false });
-  if (error) throw error;
-  return data || [];
+  return fetchAllRows<Movie>('movies');
 }
 
 export async function getMoviesByGenre(genre: string): Promise<Movie[]> {
@@ -97,9 +146,7 @@ export async function getMovieGenres(): Promise<string[]> {
 }
 
 export async function getAllSeries(): Promise<Series[]> {
-  const { data, error } = await supabase.from('series').select('*').order('created_at', { ascending: false });
-  if (error) throw error;
-  return data || [];
+  return fetchAllRows<Series>('series');
 }
 
 export async function getSeriesByGenre(genre: string): Promise<Series[]> {
@@ -117,13 +164,18 @@ export async function getSeriesGenres(): Promise<string[]> {
 }
 
 export async function getAllChannels(): Promise<Channel[]> {
-  const { data, error } = await supabase.from('channels').select('*').order('nome', { ascending: true });
-  if (error) throw error;
+  // Try English column name first, fallback to Portuguese if column doesn't exist
+  let { data, error } = await supabase.from('channels').select('*').order('name', { ascending: true });
+  if (error) {
+    const res = await supabase.from('channels').select('*').order('nome', { ascending: true });
+    if (res.error) throw res.error;
+    data = res.data;
+  }
   return data || [];
 }
 
-export async function getChannelsByGenre(genero: string): Promise<Channel[]> {
-  const { data, error } = await supabase.from('channels').select('*').eq('genero', genero).order('nome', { ascending: true });
+export async function getChannelsByCategory(category: string): Promise<Channel[]> {
+  const { data, error } = await supabase.from('channels').select('*').eq('category', category).order('name', { ascending: true });
   if (error) throw error;
   return data || [];
 }
@@ -206,8 +258,8 @@ export async function addUserProfile(profile: Partial<UserProfileDB>): Promise<U
 }
 
 // Colunas válidas no banco (evita erro de coluna inexistente)
-const MOVIE_COLS = new Set(['title', 'description', 'poster', 'backdrop', 'logo_url', 'stream_url', 'year', 'genre', 'rating', 'duration', 'tmdb_id', 'stars', 'trailer_key', 'status', 'original_title']);
-const SERIES_COLS = new Set(['title', 'description', 'poster', 'backdrop', 'logo_url', 'stream_url', 'year', 'genre', 'rating', 'seasons', 'tmdb_id', 'stars', 'trailer_key', 'status', 'original_title']);
+const MOVIE_COLS = new Set(['title', 'description', 'poster', 'backdrop', 'logo_url', 'stream_url', 'year', 'genre', 'rating', 'duration', 'tmdb_id', 'stars', 'trailer_key', 'trailer_url', 'use_trailer', 'platform', 'status', 'original_title']);
+const SERIES_COLS = new Set(['title', 'description', 'poster', 'backdrop', 'logo_url', 'year', 'genre', 'rating', 'seasons', 'tmdb_id', 'stars', 'trailer_key', 'trailer_url', 'use_trailer', 'platform', 'status', 'original_title']);
 
 function stripUnknownCols(data: Record<string, any>, validCols: Set<string>): Record<string, any> {
   const clean: Record<string, any> = {};
@@ -400,7 +452,7 @@ export default {
   getSeriesByGenre,
   getSeriesGenres,
   getAllChannels,
-  getChannelsByGenre,
+  getChannelsByCategory,
   getMovieById,
   getSeriesById,
   getSeriesByTmdbId,
@@ -613,4 +665,48 @@ export async function getCatalogWithFilters(
     movies: allMovies,
     series: allSeries
   };
+}
+
+// ═══════════════════════════════════════════════════════
+// PLANO LOCAL — Validação local para TV Box APK (sem gateway de pagamento)
+// ═══════════════════════════════════════════════════════
+const PLAN_STORAGE_KEY = 'redx-selected-plan';
+
+/** Salva plano selecionado no localStorage como 'active' */
+export function selectPlanLocally(plan: Plan): void {
+  const stored = {
+    ...plan,
+    status: 'active',
+    selectedAt: new Date().toISOString(),
+    // Expiração generosa: 1 ano
+    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+  localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(stored));
+}
+
+/** Recupera plano salvo do localStorage */
+export function getLocalPlan(): (Plan & { status: string; selectedAt: string; expiresAt: string }) | null {
+  try {
+    const raw = localStorage.getItem(PLAN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Verificar se não expirou
+    if (parsed.expiresAt && new Date(parsed.expiresAt) < new Date()) {
+      localStorage.removeItem(PLAN_STORAGE_KEY);
+      return null;
+    }
+    return { ...parsed, status: 'active' }; // Sempre retorna active
+  } catch {
+    return null;
+  }
+}
+
+/** Verifica se o usuário tem um plano ativo (local) */
+export function hasActivePlan(): boolean {
+  return getLocalPlan() !== null;
+}
+
+/** Remove plano salvo */
+export function clearLocalPlan(): void {
+  localStorage.removeItem(PLAN_STORAGE_KEY);
 }

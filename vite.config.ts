@@ -4,8 +4,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
     server: {
-      port: 3000,
-      host: '0.0.0.0',
+      port: 5173,
+      host: true,
+      strictPort: false,
     },
     plugins: [react()],
     resolve: {
@@ -19,9 +20,30 @@ export default defineConfig({
       minify: 'terser',
       terserOptions: {
         compress: {
-          drop_console: true,
+          drop_console: false,          // Não dropar tudo — preservar console.error
           drop_debugger: true,
           passes: 2,
+          pure_funcs: [
+            'console.log',
+            'console.info',
+            'console.debug',
+            'console.warn',
+            'console.time',
+            'console.timeEnd',
+            'console.timeLog',
+            'console.trace',
+            'console.count',
+            'console.countReset',
+            'console.group',
+            'console.groupEnd',
+            'console.groupCollapsed',
+            'console.table',
+            'console.dir',
+            'console.dirxml',
+            'console.profile',
+            'console.profileEnd',
+            'console.clear',
+          ],
         },
         mangle: {
           safari10: true,
@@ -36,8 +58,7 @@ export default defineConfig({
             'vendor-router': ['react-router-dom'],
             // Supabase — dados
             'vendor-supabase': ['@supabase/supabase-js'],
-            // Player — HLS.js separado (só carrega ao abrir player)
-            'vendor-player': ['hls.js'],
+            // Player — (hls.js removido, usando ExoPlayer nativo)
             // UI libs — framer-motion + lucide
             'vendor-ui': ['framer-motion', 'lucide-react'],
             // Recharts — admin only (TV Box nunca carrega)

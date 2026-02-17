@@ -165,6 +165,27 @@ export const fetchSeriesProviders = async (id: number, type: 'movie' | 'series' 
   return data.results?.BR?.flatrate || [];
 };
 
+/**
+ * Retorna o nome da plataforma de streaming principal para o Brasil (BR).
+ * Consulta flatrate (assinatura) > ads > buy, retorna a primeira encontrada.
+ * Retorna null se não houver informação.
+ */
+export const getWatchProviderName = async (tmdbId: number, type: 'movie' | 'series'): Promise<string | null> => {
+  try {
+    const endpoint = type === 'movie' ? 'movie' : 'tv';
+    const response = await fetch(`${BASE_URL}/${endpoint}/${tmdbId}/watch/providers`, fetchOptions);
+    if (!response.ok) return null;
+    const data = await response.json();
+    const br = data.results?.BR;
+    if (!br) return null;
+    // Preferência: assinatura > ads > compra/aluguel
+    const provider = br.flatrate?.[0] || br.ads?.[0] || br.rent?.[0] || br.buy?.[0];
+    return provider?.provider_name || null;
+  } catch {
+    return null;
+  }
+};
+
 export const fetchSeriesImages = async (id: number, type: 'movie' | 'series' = 'series'): Promise<any> => {
   const endpoint = type === 'movie' ? 'movie' : 'tv';
   const response = await fetch(`${BASE_URL}/${endpoint}/${id}/images`, fetchOptions);

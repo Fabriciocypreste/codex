@@ -14,8 +14,9 @@ import {
 } from '../services/tmdb';
 import { SeriesDetail, CastMember, CrewMember, SimilarSeries, Episode, Video, WatchProvider, PersonDetail, Media } from '../types';
 import GlassPanel from '../components/GlassPanel';
-import { Home, Film, Tv, Radio, Plus, Smile, Search } from 'lucide-react';
+import { Home, Film, Tv, Radio, Plus, Smile, Search, Check, Clock } from 'lucide-react';
 import { playBackSound, playSelectSound } from '../utils/soundEffects';
+import { userService } from '../services/userService';
 
 // --- UI Components Local Helper ---
 
@@ -268,6 +269,8 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
   const [isPersonLoading, setIsPersonLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inWatchLater, setInWatchLater] = useState(false);
+  const [isTogglingWatchLater, setIsTogglingWatchLater] = useState(false);
 
   const loadData = useCallback(async () => {
     let isMounted = true;
@@ -341,6 +344,30 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
   }, [media]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Verificar status de Assistir Depois ao carregar
+  useEffect(() => {
+    const tmdbId = media.tmdb_id || media.id;
+    if (tmdbId) {
+      userService.checkStatus(tmdbId).then(s => setInWatchLater(s.inWatchLater)).catch(() => {});
+    }
+  }, [media.tmdb_id, media.id]);
+
+  const handleToggleWatchLater = useCallback(async () => {
+    if (isTogglingWatchLater) return;
+    const tmdbId = media.tmdb_id || media.id;
+    if (!tmdbId) return;
+    setIsTogglingWatchLater(true);
+    setInWatchLater(prev => !prev);
+    try {
+      const result = await userService.toggleLibraryItem(tmdbId, media.type === 'series' ? 'tv' : 'movie', 'watch_later');
+      if (result === 'auth_required') setInWatchLater(prev => !prev);
+    } catch {
+      setInWatchLater(prev => !prev);
+    } finally {
+      setIsTogglingWatchLater(false);
+    }
+  }, [media, isTogglingWatchLater]);
 
   // Handle Back/Escape from TV remote on Details page
   useEffect(() => {
@@ -424,7 +451,7 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
           </svg>
           {/* Logo no centro */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <img src="/logored.png" alt="REDX" className="h-8 w-auto object-contain opacity-80" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+            <img src="/logored.png" alt="Redflix" className="h-8 w-auto object-contain opacity-80" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
           </div>
         </div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-white/25">Carregando detalhes</p>
@@ -437,16 +464,27 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
       <ActorModal person={selectedPerson} onClose={() => setSelectedPerson(null)} isLoading={isPersonLoading} />
       <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
-      {/* SPATIAL IMMERSIVE BACKGROUND */}
+      {/* Container reduzido em 35% (scale 0.65) */}
+      <div
+        className="absolute inset-0 overflow-hidden"
+        style={{
+          width: '100%',
+          minHeight: '153.85vh',
+          transform: 'scale(0.65)',
+          transformOrigin: 'top center',
+        }}
+      >
+      {/* SPATIAL IMMERSIVE BACKGROUND — 60% blur */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-black">
         <div
-          className="absolute inset-0 bg-cover bg-center transition-all duration-1000 scale-110 opacity-60"
+          className="absolute inset-0 bg-cover bg-center transition-all duration-1000 scale-110"
           style={{
             backgroundImage: `url(${getImageUrl(series.poster_path || series.backdrop_path, 'original')})`,
-            filter: 'blur(30px) brightness(0.35) saturate(1.2)'
+            filter: 'blur(60px) brightness(0.4) saturate(1.3)',
+            opacity: 0.6
           }}
         />
-        <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-black" />
+        <div className="absolute inset-0 bg-linear-to-b from-black/30 via-transparent to-black" />
       </div>
 
       <header className="fixed top-0 left-0 right-0 z-[60] py-4 md:py-8 px-4 md:px-16 flex justify-between items-center transition-all duration-500 pointer-events-none">
@@ -478,45 +516,150 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
         </div>
       </header>
 
-      <section className="relative w-full h-[70vh] md:h-[85vh] z-10 mask-vignette overflow-hidden">
+      <section className="relative w-full h-[70vh] md:h-[85vh] z-10 overflow-hidden">
+        {/* Backdrop / Trailer */}
         {isTrailerActive && videos.length > 0 ? (
           <div className="absolute inset-0 z-0 scale-[1.35] brightness-75">
             <iframe src={`https://www.youtube.com/embed/${videos[0].key}?autoplay=1&controls=0&modestbranding=1&rel=0&mute=0`} className="w-full h-full pointer-events-none" allow="autoplay; encrypted-media" />
           </div>
         ) : (
-          <div className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-2000 ease-out" style={{ backgroundImage: `url(${getImageUrl(series.backdrop_path, 'original')})` }} />
+          <div className="absolute inset-0 z-0">
+            <img
+              src={getImageUrl(series.backdrop_path || series.poster_path, 'original')}
+              alt={series.name}
+              className="w-full h-full object-cover"
+            />
+          </div>
         )}
-        <div className="absolute inset-0 bg-linear-to-t from-black via-black/30 to-transparent" />
-        <div className="absolute inset-0 bg-linear-to-r from-black via-transparent to-transparent" />
-        <div className="relative z-10 h-full responsive-container flex flex-col justify-end pb-20 md:pb-40 px-8">
-          <div className="max-w-4xl animate-in fade-in slide-in-from-bottom-10 duration-1000 px-4 md:px-0">
-            {logoPath ? (
-              <img src={getImageUrl(logoPath, 'w780')} alt={series.name} className="h-5 md:h-12 w-auto mb-3 md:mb-5 object-contain drop-shadow-[0_25px_50px_rgba(0,0,0,0.85)]" />
-            ) : (
-              <h1 className="text-5xl md:text-9xl font-black mb-6 md:mb-8 tracking-tighter drop-shadow-2xl leading-[0.9]">{series.name}</h1>
+
+        {/* Gradientes */}
+        <div className="absolute inset-0 bg-linear-to-t from-black via-black/40 to-transparent z-10" />
+        <div className="absolute inset-0 bg-linear-to-r from-black/80 via-black/30 to-transparent z-10" />
+
+        {/* ═══ CARD GLASS VISIONOS ═══ */}
+        <div className="absolute bottom-[12%] left-8 md:left-12 z-20 w-[400px] max-w-[90vw]">
+          <div
+            className="rounded-3xl border border-white/[0.12] p-7 flex flex-col items-center text-center gap-4"
+            style={{
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)',
+              backdropFilter: 'blur(40px) saturate(1.6)',
+              WebkitBackdropFilter: 'blur(40px) saturate(1.6)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+            }}
+          >
+            {/* Logo ou Título */}
+            <div className="w-full flex justify-center min-h-[60px]">
+              {logoPath ? (
+                <img
+                  src={getImageUrl(logoPath, 'w780')}
+                  alt={series.name}
+                  className="max-h-[80px] max-w-[320px] w-auto object-contain drop-shadow-[0_4px_20px_rgba(0,0,0,0.6)]"
+                />
+              ) : (
+                <h2 className="text-2xl md:text-3xl font-black text-white drop-shadow-2xl leading-tight">
+                  {series.name}
+                </h2>
+              )}
+            </div>
+
+            {/* Estrelas + Tipo + Ano */}
+            <div className="flex items-center gap-2">
+              {series.vote_average && series.vote_average > 0 && (
+                <div className="flex gap-0.5">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <span key={i} className={`text-sm ${i < Math.round((series.vote_average / 10) * 5) ? 'text-white' : 'text-white/25'}`}>★</span>
+                  ))}
+                </div>
+              )}
+              <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-white/50">
+                {media.type === 'series' ? 'Série' : 'Filme'}
+              </span>
+              {(series.first_air_date || series.release_date) && (
+                <span className="text-[11px] font-medium text-white/40">
+                  {new Date(series.first_air_date || series.release_date || '').getFullYear()}
+                </span>
+              )}
+            </div>
+
+            {/* Gêneros */}
+            {series.genres && series.genres.length > 0 && (
+              <div className="flex gap-2 flex-wrap justify-center">
+                {series.genres.slice(0, 3).map(g => (
+                  <span key={g.id} className="text-[10px] px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/50 uppercase tracking-wider font-medium">
+                    {g.name}
+                  </span>
+                ))}
+              </div>
             )}
-            <p className="text-lg md:text-2xl font-light text-white/60 mb-8 md:mb-12 max-w-2xl italic drop-shadow-lg line-clamp-2 md:line-clamp-none">{series.tagline ? `"${series.tagline}"` : series.overview?.slice(0, 120)}</p>
-            <div className="flex flex-wrap gap-2 md:gap-3" data-nav-row={0}>
+
+            {/* Descrição */}
+            {(series.tagline || series.overview) && (
+              <p className="text-white/70 text-[13px] leading-relaxed line-clamp-3 max-w-[340px]">
+                {series.tagline ? `"${series.tagline}"` : series.overview?.slice(0, 150)}
+              </p>
+            )}
+
+            {/* Botões Glass */}
+            <div className="flex items-center gap-3 w-full mt-1" data-nav-row={0}>
               <button
+                tabIndex={0}
                 data-nav-item
                 data-nav-col={0}
-                tabIndex={0}
-                onClick={onPlay}
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl
+                  bg-white/90 text-black font-bold text-sm
+                  shadow-[0_4px_16px_rgba(0,0,0,0.25)]
+                  hover:bg-white hover:scale-[1.03] active:scale-95
+                  transition-all duration-200 outline-none
+                  focus-visible:ring-2 focus-visible:ring-white focus-visible:scale-[1.03]"
+                onClick={() => { playSelectSound(); onPlay(); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); playSelectSound(); onPlay(); } }}
-                className="vision-btn vision-btn-highlight red-glow-btn px-3 md:px-5 py-1.5 md:py-2.5 rounded-full font-black text-xs md:text-base flex items-center gap-2 group outline-none focus:ring-2 focus:ring-[#E50914] focus:scale-105">
-                <div className="w-3.5 h-3.5 md:w-5 md:h-5 rounded-full bg-red-600 flex items-center justify-center text-white group-hover:scale-110 transition-transform shadow-[0_0_20px_rgba(255,0,0,0.6)]">
-                  <svg className="w-3 h-3 md:w-4 md:h-4 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                </div>
-                Assistir Agora
+              >
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                Assistir
               </button>
+
               <button
+                tabIndex={0}
                 data-nav-item
                 data-nav-col={1}
-                tabIndex={0}
-                onClick={() => setIsTrailerActive(!isTrailerActive)}
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl
+                  border border-white/20 text-white font-bold text-sm
+                  hover:bg-white/15 hover:scale-[1.03] active:scale-95
+                  transition-all duration-200 outline-none
+                  focus-visible:ring-2 focus-visible:ring-white focus-visible:scale-[1.03]"
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                }}
+                onClick={() => { playSelectSound(); setIsTrailerActive(!isTrailerActive); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); playSelectSound(); setIsTrailerActive(!isTrailerActive); } }}
-                className="vision-btn px-2.5 md:px-4 py-1.5 md:py-2.5 rounded-full font-bold text-xs md:text-base outline-none focus:ring-2 focus:ring-[#E50914] focus:scale-105">
-                {isTrailerActive ? 'Fechar Trailer' : 'Trailer Oficial'}
+              >
+                {isTrailerActive ? 'Fechar Trailer' : 'Trailer'}
+              </button>
+              <button
+                type="button"
+                tabIndex={0}
+                data-nav-item
+                data-nav-col={2}
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl
+                  border border-white/20 font-bold text-sm
+                  hover:bg-white/15 hover:scale-[1.03] active:scale-95
+                  transition-all duration-200 outline-none
+                  focus-visible:ring-2 focus-visible:ring-white focus-visible:scale-[1.03]
+                  disabled:opacity-50"
+                style={{
+                  background: inWatchLater ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.08)',
+                  color: inWatchLater ? '#93c5fd' : 'white',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                }}
+                onClick={() => { playSelectSound(); handleToggleWatchLater(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); playSelectSound(); handleToggleWatchLater(); } }}
+                disabled={isTogglingWatchLater}
+              >
+                {inWatchLater ? <Check size={18} /> : <Clock size={18} />}
+                {inWatchLater ? 'Na Lista' : 'Assistir Depois'}
               </button>
             </div>
           </div>
@@ -668,7 +811,7 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
           {cast.length === 0 ? (
             <CastSkeleton />
           ) : (
-            <div className="flex gap-6 md:gap-10 overflow-x-auto no-scrollbar pb-12 px-2" data-nav-row="cast">
+            <div className="flex gap-6 md:gap-10 overflow-x-auto no-scrollbar pb-12 px-2" data-nav-row={50} data-nav-scroll>
               {cast.slice(0, 15).map((p, castIdx) => (
                 <div key={p.id} className="flex-shrink-0 w-32 md:w-40 text-center" data-nav-item data-nav-col={castIdx}>
                   <TiltCard intensity={15} className="w-32 md:w-40 group cursor-pointer" innerClassName="!bg-transparent !p-0">
@@ -705,9 +848,9 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
             <h2 className="text-[9px] md:text-[11px] font-black tracking-[0.8em] text-white/15 uppercase whitespace-nowrap">Expansão Spatial</h2>
             <div className="h-px flex-1 bg-linear-to-r from-red-600/30 via-white/5 to-transparent"></div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6 md:gap-12">
-            {similar.slice(0, 6).map(item => (
-              <div key={item.id} className="group cursor-pointer" tabIndex={0} role="button" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); playSelectSound(); } }} >
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6 md:gap-12" data-nav-row={60}>
+            {similar.slice(0, 6).map((item, simIdx) => (
+              <div key={item.id} className="group cursor-pointer" tabIndex={0} role="button" data-nav-item data-nav-col={simIdx} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); playSelectSound(); } }} >
                 <div className="relative aspect-[2/3] rounded-[2rem] md:rounded-[3rem] overflow-hidden mb-6 md:mb-8 shadow-2xl transition-all duration-1000 group-hover:-translate-y-4 group-focus:-translate-y-4 border border-white/10 hover:border-white/30 focus-within:border-[#E50914]/50 focus-within:ring-2 focus-within:ring-[#E50914]">
                   <img src={getImageUrl(item.poster_path, 'w500')} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 group-focus:scale-110 transition-transform duration-1000" loading="lazy" />
                   <div className="absolute inset-0 bg-linear-to-t from-red-950/95 via-black/10 to-transparent opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-all duration-700 flex flex-col justify-end p-6 md:p-8">
@@ -738,6 +881,7 @@ const Details: React.FC<DetailsProps> = ({ media, onPlay, onBack }) => {
           </div>
         </div>
       </footer>
+      </div>
     </div>
   );
 };

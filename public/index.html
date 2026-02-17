@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redflix | Spatial Streaming</title>
+    <!-- TV Box: D-pad bridge - MainActivity.injectKey calls this -->
+    <script>
+      (function(){
+        var m={ArrowUp:38,ArrowDown:40,ArrowLeft:37,ArrowRight:39,Enter:13,Escape:27,Backspace:8,' ':32,Menu:0};
+        for(var i=0;i<=9;i++)m[''+i]=48+i;
+        
+        window.__dispatchTVKey__=function(k){
+          var key=(k===' '||k==='Space')?' ':(k||'');
+          var c=m[key]||0;
+          var codeStr=key===' '?'Space':(key.indexOf('Arrow')===0||key==='Enter'||key==='Escape'||key==='Backspace'||key==='Tab'?key:'Key'+key);
+          var el=document.activeElement;
+          var inInput=el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable);
+          var isFocusable=el&&(el.tagName==='BUTTON'||el.tagName==='A'||el.hasAttribute('tabindex')||el.hasAttribute('data-nav-item'));
+          try{
+            var opts={key:key,code:codeStr,keyCode:c,which:c,bubbles:true,cancelable:true,composed:true};
+            if(inInput){
+              el.dispatchEvent(new KeyboardEvent('keydown',opts));
+            }else if(isFocusable){
+              var ev=new KeyboardEvent('keydown',opts);
+              el.dispatchEvent(ev);
+              if(key==='Enter'&&(el.tagName==='BUTTON'||el.tagName==='A')) el.click();
+              if(!ev.defaultPrevented) window.dispatchEvent(new KeyboardEvent('keydown',opts));
+            }else{
+              window.dispatchEvent(new KeyboardEvent('keydown',opts));
+            }
+          }catch(e){
+            try{var ev2=document.createEvent('Event');ev2.initEvent('keydown',true,true);ev2.key=key;ev2.keyCode=c;ev2.which=c;window.dispatchEvent(ev2);}catch(e3){}
+          }
+          // Debug overlay removido para produção
+        };
+        window.__canExitApp=false;
+      })();
+    </script>
+    <!-- Removed Tailwind CDN to fix production error -->
+    <!-- FontAwesome was also causing issues, relying on Lucide React now -->
+    <!-- Google Fonts: preload non-blocking (evita render-blocking) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0B0B0F;
+            color: #ffffff;
+            margin: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .spatial-shadow {
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .red-glow {
+            box-shadow: 0 0 25px rgba(229, 9, 20, 0.3);
+        }
+
+        .red-glow-strong {
+            box-shadow: 0 0 40px rgba(229, 9, 20, 0.5);
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+    </style>
+    <!-- Favicon placeholder to avoid 404 -->
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+  <script type="module" crossorigin src="/assets/index-BQ1NHbQH.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/vendor-ui-B3Q904Bv.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-router-DU7qKgXk.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-supabase-lHDrsOcV.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-B6lkYfqJ.css">
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>

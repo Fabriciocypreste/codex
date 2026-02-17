@@ -170,11 +170,10 @@ const LazyImage: React.FC<LazyImageProps> = React.memo(({
       // 2. Full image — decode assíncrono
       if (loadState === 'loading') {
         try {
-          const img = new Image();
-          img.src = src;
+          const img = new Image() as HTMLImageElement;
 
           // decode() não bloqueia a main thread
-          if ('decode' in img) {
+          if (typeof img.decode === 'function') {
             await new Promise<void>((resolve, reject) => {
               img.onload = () => resolve();
               img.onerror = () => reject(new Error('load_failed'));
@@ -185,6 +184,7 @@ const LazyImage: React.FC<LazyImageProps> = React.memo(({
             await new Promise<void>((resolve, reject) => {
               img.onload = () => resolve();
               img.onerror = () => reject(new Error('load_failed'));
+              img.src = src;
             });
           }
 

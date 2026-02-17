@@ -2,8 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '../../layouts/AdminLayout';
 import { Film, Tv, Search, Edit2, Trash2, Plus, Star, Save, X, Upload, AlertTriangle, Globe, Sparkles } from 'lucide-react';
 import { getAllMovies, getAllSeries, insertMovie, insertSeries, updateMovie, updateSeries, deleteMovie, deleteSeries, uploadImage, supabase, insertImageUpdate } from '../../services/supabaseService';
-import { searchAnyLang, getImageUrl } from '../../services/tmdb';
+import { searchAnyLang, getImageUrl, getWatchProviderName } from '../../services/tmdb';
 import { Media } from '../../types';
+import { detectPlatformFromUrl } from '../../utils/mediaUtils';
+
+// Helper: resolver URL do poster (trata paths TMDB parciais, URLs completas e vazios)
+const resolvePosterUrl = (poster?: string | null): string | null => {
+  if (!poster) return null;
+  // Já é URL completa
+  if (poster.startsWith('http://') || poster.startsWith('https://')) return poster;
+  // Path TMDB parcial (ex: /abc123.jpg)
+  if (poster.startsWith('/')) return `https://image.tmdb.org/t/p/w500${poster}`;
+  return null;
+};
 
 const VOD: React.FC = () => {
   // Estados principais
@@ -88,6 +99,10 @@ const VOD: React.FC = () => {
   });
   const [creating, setCreating] = useState(false);
 
+  // Enriquecimento de plataformas via TMDB
+  const [enriching, setEnriching] = useState(false);
+  const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0, found: 0, errors: 0 });
+
   // TMDB search for create
   const [tmdbSearchQuery, setTmdbSearchQuery] = useState('');
   const [tmdbSearchResults, setTmdbSearchResults] = useState<any[]>([]);
@@ -110,13 +125,38 @@ const VOD: React.FC = () => {
     }
   };
 
-  const fillFromTmdb = (result: any) => {
+  const fillFromTmdb = async (result: any) => {
+    // Converter posters/backdrops TMDB para WebP via canvas e upload ao Supabase Storage
+    const convertTmdbUrlToWebP = async (tmdbUrl: string, bucket: 'posters' | 'backdrops'): Promise<string> => {
+      try {
+        const response = await fetch(tmdbUrl);
+        if (!response.ok) throw new Error('Fetch failed');
+        const blob = await response.blob();
+        const file = new File([blob], `tmdb-${result.id}-${bucket}.jpg`, { type: blob.type });
+        const webpFile = await convertToWebP(file);
+        const uploadedUrl = await uploadImage(webpFile, bucket);
+        return uploadedUrl || tmdbUrl;
+      } catch (err) {
+        console.warn(`[VOD] Falha ao converter poster TMDB para WebP (${bucket}):`, err);
+        return tmdbUrl; // Fallback: usar URL TMDB original
+      }
+    };
+
+    let posterUrl = result.poster_path ? `https://image.tmdb.org/t/p/w500${result.poster_path}` : '';
+    let backdropUrl = result.backdrop_path ? `https://image.tmdb.org/t/p/original${result.backdrop_path}` : '';
+
+    // Processar conversões em paralelo (sem bloquear UI excessivamente)
+    const [finalPoster, finalBackdrop] = await Promise.all([
+      posterUrl ? convertTmdbUrlToWebP(posterUrl, 'posters') : Promise.resolve(posterUrl),
+      backdropUrl ? convertTmdbUrlToWebP(backdropUrl, 'backdrops') : Promise.resolve(backdropUrl),
+    ]);
+
     setCreateForm(prev => ({
       ...prev,
       title: result.title || result.name || prev.title,
       description: result.overview || prev.description,
-      poster: result.poster_path ? `https://image.tmdb.org/t/p/w500${result.poster_path}` : prev.poster,
-      backdrop: result.backdrop_path ? `https://image.tmdb.org/t/p/original${result.backdrop_path}` : prev.backdrop,
+      poster: finalPoster || prev.poster,
+      backdrop: finalBackdrop || prev.backdrop,
       year: new Date(result.release_date || result.first_air_date || '').getFullYear() || prev.year,
       tmdb_id: String(result.id),
       rating: result.vote_average?.toFixed(1) || prev.rating,
@@ -139,6 +179,9 @@ const VOD: React.FC = () => {
         backdrop: createForm.backdrop || null,
         logo_url: createForm.logo_url || null,
         stream_url: createForm.stream_url || null,
+        trailer_url: createForm.trailer_url || null,
+        use_trailer: createForm.use_trailer || false,
+        platform: createForm.platform || null,
         year: createForm.year || null,
         genre: createForm.genre ? createForm.genre.split(',').map(g => g.trim()).filter(Boolean) : [],
         status: createForm.status,
@@ -186,7 +229,25 @@ const VOD: React.FC = () => {
       const normalizedMovies = (movies || []).map(m => ({ ...m, type: 'movie' as const }));
       const normalizedSeries = (series || []).map(s => ({ ...s, type: 'series' as const }));
       const merged = [...normalizedMovies, ...normalizedSeries];
-      setItems(merged);
+
+      // Auto-preencher stream_url faltante cruzando por título normalizado
+      const normTitle = (t: string) => (t || '').toLowerCase().replace(/\s*\(\d{4}\)\s*$/, '').trim();
+      const urlByTitle = new Map<string, string>();
+      merged.forEach(item => {
+        if (item.stream_url) {
+          const key = normTitle(item.title);
+          if (key && !urlByTitle.has(key)) urlByTitle.set(key, item.stream_url);
+        }
+      });
+      const enriched = merged.map(item => {
+        if (!item.stream_url) {
+          const found = urlByTitle.get(normTitle(item.title));
+          if (found) return { ...item, stream_url: found };
+        }
+        return item;
+      });
+
+      setItems(enriched);
       setStats({ movies: normalizedMovies.length, series: normalizedSeries.length });
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -236,12 +297,19 @@ const VOD: React.FC = () => {
     });
   };
 
-  // Upload single file handler
+  // Upload single file handler — converte para WebP obrigatoriamente antes de upload
   const handleFileUpload = async (file: File, bucket: 'posters' | 'backdrops' | 'logos', field: 'poster' | 'backdrop' | 'logo_url') => {
     setSaving(true);
     try {
-      // Manter upload direto; conversão só no batch
-      const url = await uploadImage(file, bucket);
+      let finalFile = file;
+      if (typeof window !== 'undefined' && isConvertibleImage(file)) {
+        try {
+          finalFile = await convertToWebP(file);
+        } catch (err) {
+          console.warn('[VOD] Falha conversão WebP, usando original', err);
+        }
+      }
+      const url = await uploadImage(finalFile, bucket);
       if (url) {
         setEditForm(prev => ({ ...prev, [field]: url }));
       } else {
@@ -657,8 +725,8 @@ const VOD: React.FC = () => {
   };
   // Extrair apenas colunas válidas do banco para insert
   const sanitizeForDB = (item: any, table: 'movies' | 'series') => {
-    const movieCols = ['title', 'description', 'poster', 'backdrop', 'logo_url', 'stream_url', 'year', 'genre', 'rating', 'duration', 'tmdb_id', 'stars', 'trailer_key', 'status'];
-    const seriesCols = ['title', 'description', 'poster', 'backdrop', 'logo_url', 'stream_url', 'year', 'genre', 'rating', 'seasons', 'tmdb_id', 'stars', 'trailer_key', 'status'];
+    const movieCols = ['title', 'description', 'poster', 'backdrop', 'logo_url', 'stream_url', 'year', 'genre', 'rating', 'duration', 'tmdb_id', 'stars', 'trailer_key', 'trailer_url', 'use_trailer', 'platform', 'status'];
+    const seriesCols = ['title', 'description', 'poster', 'backdrop', 'logo_url', 'year', 'genre', 'rating', 'seasons', 'tmdb_id', 'stars', 'trailer_key', 'trailer_url', 'use_trailer', 'platform', 'status'];
     const validCols = table === 'movies' ? movieCols : seriesCols;
     const clean: Record<string, any> = {};
     for (const col of validCols) {
@@ -756,8 +824,56 @@ const VOD: React.FC = () => {
       logs.push(`\u2705 Séries enriquecidas: ${withPoster}/${enrichedSeries.length} com imagens TMDB`);
     }
 
-    // === FASE 2: Sanitizar e inserir no banco ===
-    setImportProgress(prev => ({ ...prev, step: 'Inserindo no banco...', logs: [...logs, '\ud83d\udcbe Inserindo conteúdo no Supabase...'] }));
+    // === FASE 2: Converter URLs TMDB para WebP no Storage ===
+    setImportProgress(prev => ({ ...prev, step: 'Convertendo imagens para WebP...', logs: [...logs, '🖼️ Convertendo posters/backdrops TMDB para WebP...'] }));
+
+    const convertTmdbUrlToStorage = async (url: string, bucket: 'posters' | 'backdrops', itemTitle: string): Promise<string> => {
+      if (!url || !url.includes('tmdb.org')) return url;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return url;
+        const blob = await response.blob();
+        const safeName = (itemTitle || 'item').replace(/[^a-zA-Z0-9]/g, '-').substring(0, 60);
+        const file = new File([blob], `${safeName}-${bucket}.jpg`, { type: blob.type });
+        const webpFile = await convertToWebP(file);
+        const storageUrl = await uploadImage(webpFile, bucket);
+        return storageUrl || url;
+      } catch {
+        return url; // Fallback: manter URL TMDB
+      }
+    };
+
+    // Processar conversão em lotes de 4 (evitar sobrecarga)
+    const convertImagesBatch = async (items: any[], label: string) => {
+      const batchSize = 4;
+      for (let i = 0; i < items.length; i += batchSize) {
+        const batch = items.slice(i, i + batchSize);
+        await Promise.allSettled(batch.map(async (item) => {
+          if (item.poster && item.poster.includes('tmdb.org')) {
+            item.poster = await convertTmdbUrlToStorage(item.poster, 'posters', item.title);
+          }
+          if (item.backdrop && item.backdrop.includes('tmdb.org')) {
+            item.backdrop = await convertTmdbUrlToStorage(item.backdrop, 'backdrops', item.title);
+          }
+        }));
+        const pct = Math.min(100, Math.round(((i + batchSize) / items.length) * 100));
+        setImportProgress(prev => ({ ...prev, logs: [`🖼️ Convertendo imagens ${label}: ${pct}%`] }));
+      }
+    };
+
+    if (enrichedMovies.length > 0) {
+      await convertImagesBatch(enrichedMovies, 'filmes');
+      const converted = enrichedMovies.filter(m => m.poster && !m.poster.includes('tmdb.org')).length;
+      logs.push(`🖼️ Filmes: ${converted}/${enrichedMovies.length} imagens convertidas para WebP`);
+    }
+    if (enrichedSeries.length > 0) {
+      await convertImagesBatch(enrichedSeries, 'séries');
+      const converted = enrichedSeries.filter(s => s.poster && !s.poster.includes('tmdb.org')).length;
+      logs.push(`🖼️ Séries: ${converted}/${enrichedSeries.length} imagens convertidas para WebP`);
+    }
+
+    // === FASE 3: Sanitizar e inserir no banco ===
+    setImportProgress(prev => ({ ...prev, step: 'Inserindo no banco...', logs: [...logs, '💾 Inserindo conteúdo no Supabase...'] }));
 
     const moviesToInsert = enrichedMovies.map(x => sanitizeForDB(x, 'movies'));
     const seriesToInsert = enrichedSeries.map(x => sanitizeForDB(x, 'series'));
@@ -1118,14 +1234,14 @@ const VOD: React.FC = () => {
     const matchesSearch = !q || (item.title || '').toLowerCase().includes(q) || (item.description || '').toLowerCase().includes(q);
     const matchesType = filterType === 'Todos' || item.type === filterType;
     const matchesYear = filterYear === 'Todos' || (item.year?.toString() === filterYear);
-    const matchesPlatform = filterPlatform === 'Todos' || item.platform === filterPlatform;
+    const matchesPlatform = filterPlatform === 'Todos' || (item.platform || detectPlatformFromUrl(item.stream_url)) === filterPlatform;
     const matchesStatus = filterStatus === 'Todos' || (item.status || 'published') === filterStatus;
     const matchesGenre = filterGenre === 'Todos' || (item.genre || []).includes(filterGenre);
     return matchesSearch && matchesType && matchesYear && matchesPlatform && matchesStatus && matchesGenre;
   });
 
   const years = Array.from(new Set(items.map(i => i.year).filter(Boolean))).sort((a, b) => (b as number) - (a as number));
-  const platforms = Array.from(new Set(items.map(i => i.platform).filter(Boolean))).sort();
+  const platforms = Array.from(new Set(items.map(i => i.platform || detectPlatformFromUrl(i.stream_url)).filter(Boolean))).sort();
   const genres = Array.from(new Set(items.flatMap(i => i.genre || []).filter(Boolean))).sort();
 
   // Selection & Bulk Actions
@@ -1195,6 +1311,49 @@ const VOD: React.FC = () => {
     }
   };
 
+  // Enriquecer plataformas via TMDB watch/providers
+  const handleEnrichPlatforms = useCallback(async () => {
+    const missing = items.filter(i => !i.platform && i.tmdb_id);
+    if (missing.length === 0) { alert('Todos os itens já possuem plataforma definida ou não têm TMDB ID.'); return; }
+    setEnriching(true);
+    setEnrichProgress({ done: 0, total: missing.length, found: 0, errors: 0 });
+    const BATCH = 8;
+    let found = 0, errors = 0;
+    const updatedMap = new Map<string, string>();
+    for (let i = 0; i < missing.length; i += BATCH) {
+      const batch = missing.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        batch.map(async (item) => {
+          const provider = await getWatchProviderName(item.tmdb_id!, item.type as 'movie' | 'series');
+          return { item, provider };
+        })
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.provider) {
+          const { item, provider } = r.value;
+          updatedMap.set(item.id, provider!);
+          found++;
+          // Salvar no Supabase
+          try {
+            if (item.type === 'movie') await updateMovie(item.id, { platform: provider } as any);
+            else await updateSeries(item.id, { platform: provider } as any);
+          } catch { errors++; }
+        } else if (r.status === 'rejected') {
+          errors++;
+        }
+      }
+      setEnrichProgress({ done: Math.min(i + BATCH, missing.length), total: missing.length, found, errors });
+      // Pequeno delay para não sobrecarregar a API
+      if (i + BATCH < missing.length) await new Promise(ok => setTimeout(ok, 250));
+    }
+    // Atualizar estado local
+    if (updatedMap.size > 0) {
+      setItems(prev => prev.map(item => updatedMap.has(item.id) ? { ...item, platform: updatedMap.get(item.id) } : item));
+    }
+    setEnriching(false);
+    alert(`Concluído! ${found} plataformas encontradas, ${errors} erros, ${missing.length - found - errors} sem dados no TMDB.`);
+  }, [items]);
+
   return (
     <AdminLayout>
       <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -1213,8 +1372,29 @@ const VOD: React.FC = () => {
             <button onClick={() => setShowImportUpload(true)} className="px-6 py-3 rounded-xl font-bold text-sm bg-purple-600 hover:bg-purple-700 text-white transition-all flex items-center gap-2">
               <Upload size={18} /> Importar M3U/JSON
             </button>
+            <button
+              onClick={handleEnrichPlatforms}
+              disabled={enriching || loading}
+              className="px-6 py-3 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-all flex items-center gap-2"
+              title="Buscar plataforma real via TMDB para itens sem plataforma definida"
+            >
+              <Globe size={18} /> {enriching ? 'Buscando...' : 'Enriquecer Plataformas'}
+            </button>
           </div>
         </div>
+
+        {/* Barra de progresso do enriquecimento */}
+        {enriching && (
+          <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-emerald-400 font-bold">Buscando plataformas no TMDB...</span>
+              <span className="text-white/60">{enrichProgress.done}/{enrichProgress.total} processados · {enrichProgress.found} encontrados · {enrichProgress.errors} erros</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-2">
+              <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: `${enrichProgress.total ? (enrichProgress.done / enrichProgress.total * 100) : 0}%` }} />
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1227,12 +1407,12 @@ const VOD: React.FC = () => {
             <p className="text-2xl font-bold text-white">{loading ? '...' : stats.series.toLocaleString()}</p>
           </div>
           <div className="bg-[#121217] p-4 rounded-2xl border border-white/5">
-            <p className="text-xs uppercase tracking-widest text-white/40 mb-1">Pendentes</p>
-            <p className="text-2xl font-bold text-yellow-500">0</p>
+            <p className="text-xs uppercase tracking-widest text-white/40 mb-1">Sem Plataforma</p>
+            <p className="text-2xl font-bold text-yellow-500">{loading ? '...' : items.filter(i => !i.platform && i.tmdb_id).length.toLocaleString()}</p>
           </div>
           <div className="bg-[#121217] p-4 rounded-2xl border border-white/5">
-            <p className="text-xs uppercase tracking-widest text-white/40 mb-1">Erros TMDB</p>
-            <p className="text-2xl font-bold text-red-500">0</p>
+            <p className="text-xs uppercase tracking-widest text-white/40 mb-1">Com Stream URL</p>
+            <p className="text-2xl font-bold text-emerald-500">{loading ? '...' : items.filter(i => i.stream_url).length.toLocaleString()}</p>
           </div>
         </div>
 
@@ -1311,6 +1491,8 @@ const VOD: React.FC = () => {
                   <th className="px-6 py-4">Mídia</th>
                   <th className="px-6 py-4">Título</th>
                   <th className="px-6 py-4">Tipo</th>
+                  <th className="px-6 py-4">Plataforma</th>
+                  <th className="px-6 py-4">Stream URL</th>
                   <th className="px-6 py-4">Ano</th>
                   <th className="px-6 py-4">Rating</th>
                   <th className="px-6 py-4 text-right">Ações</th>
@@ -1318,7 +1500,7 @@ const VOD: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {loading ? (
-                  <tr><td colSpan={7} className="text-center py-8">Carregando...</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8">Carregando...</td></tr>
                 ) : filteredItems.map((item) => (
                   <tr key={item.id} className={`hover:bg-white/5 transition-colors group ${selectedIds.has(item.id) ? 'bg-white/5' : ''}`}>
                     <td className="px-6 py-4">
@@ -1330,8 +1512,29 @@ const VOD: React.FC = () => {
                       />
                     </td>
                     <td className="px-6 py-4">
-                      <div className="w-16 h-[5.6rem] bg-white/10 rounded overflow-hidden relative group-hover:scale-105 transition-transform duration-300">
-                        {item.poster ? <img src={item.poster} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/20">Sem Imagem</div>}
+                      <div className="flex items-center gap-3">
+                        <div className="w-16 h-[5.6rem] bg-white/10 rounded overflow-hidden relative group-hover:scale-105 transition-transform duration-300 shrink-0">
+                          {resolvePosterUrl(item.poster) ? (
+                            <a href={resolvePosterUrl(item.poster)!} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+                              <img src={resolvePosterUrl(item.poster)!} alt="" className="w-full h-full object-cover" />
+                            </a>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-white/20 text-[8px]">Sem Imagem</div>
+                          )}
+                        </div>
+                        {resolvePosterUrl(item.poster) && (
+                          <div className="max-w-[200px] hidden xl:block">
+                            <a
+                              href={resolvePosterUrl(item.poster)!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[9px] text-blue-400/70 hover:text-blue-300 font-mono break-all line-clamp-2 underline decoration-blue-400/30"
+                              title={resolvePosterUrl(item.poster)!}
+                            >
+                              {resolvePosterUrl(item.poster)!}
+                            </a>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 font-bold">{item.title}</td>
@@ -1341,9 +1544,34 @@ const VOD: React.FC = () => {
                           {item.type === 'movie' ? <Film size={12} /> : <Tv size={12} />}
                           {item.type === 'movie' ? 'Filme' : 'Série'}
                         </span>
-                        {item.platform && <span className="text-[10px] text-white/40 uppercase tracking-widest">{item.platform}</span>}
                         <span className={`text-[10px] uppercase font-bold ${item.status === 'draft' ? 'text-yellow-500' : 'text-green-500'}`}>{item.status === 'draft' ? 'Rascunho' : 'Publicado'}</span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {(() => {
+                        const plat = item.platform || detectPlatformFromUrl(item.stream_url);
+                        if (plat) {
+                          return <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">{plat}</span>;
+                        }
+                        return <span className="text-[10px] text-white/20 italic">—</span>;
+                      })()}
+                    </td>
+                    <td className="px-6 py-4">
+                      {item.stream_url ? (
+                        <div className="max-w-[260px]">
+                          <a
+                            href={item.stream_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-emerald-400 hover:text-emerald-300 font-mono break-all line-clamp-3 underline decoration-emerald-400/40 leading-relaxed"
+                            title={item.stream_url}
+                          >
+                            {item.stream_url}
+                          </a>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-red-400/80 font-bold uppercase tracking-wide bg-red-500/10 px-2 py-1 rounded">Sem URL</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-white/60">{item.year || '-'}</td>
                     <td className="px-6 py-4 flex items-center gap-1 text-yellow-500 font-bold"><Star size={12} fill="currentColor" /> {item.rating ?? '-'}</td>
@@ -1848,7 +2076,9 @@ const VOD: React.FC = () => {
                           <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
                             if (!e.target.files?.[0]) return;
                             setCreating(true);
-                            const url = await uploadImage(e.target.files[0], 'posters');
+                            let file = e.target.files[0];
+                            if (isConvertibleImage(file)) { try { file = await convertToWebP(file); } catch {} }
+                            const url = await uploadImage(file, 'posters');
                             if (url) setCreateForm(prev => ({ ...prev, poster: url }));
                             setCreating(false);
                           }} />
@@ -1864,7 +2094,9 @@ const VOD: React.FC = () => {
                           <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
                             if (!e.target.files?.[0]) return;
                             setCreating(true);
-                            const url = await uploadImage(e.target.files[0], 'backdrops');
+                            let file = e.target.files[0];
+                            if (isConvertibleImage(file)) { try { file = await convertToWebP(file); } catch {} }
+                            const url = await uploadImage(file, 'backdrops');
                             if (url) setCreateForm(prev => ({ ...prev, backdrop: url }));
                             setCreating(false);
                           }} />
@@ -1902,7 +2134,7 @@ const VOD: React.FC = () => {
                         <div>
                           <p className="text-[10px] text-white/30 mb-2">Poster Vertical</p>
                           <div className="aspect-[2/3] bg-white/5 rounded-lg overflow-hidden">
-                            {createForm.poster ? <img src={createForm.poster} className="w-full h-full object-cover" alt="Preview poster" /> : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">Sem imagem</div>}
+                            {resolvePosterUrl(createForm.poster) ? <img src={resolvePosterUrl(createForm.poster)!} className="w-full h-full object-cover" alt="Preview poster" /> : <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">Sem imagem</div>}
                           </div>
                         </div>
                         <div>
@@ -2059,7 +2291,7 @@ const VOD: React.FC = () => {
                     <div className="bg-black/40 rounded-xl p-4 border border-white/5">
                       <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-4">Vertical</p>
                       <div className="w-full aspect-[2/3] bg-white/5 rounded-lg overflow-hidden">
-                        {editForm.poster ? <img src={editForm.poster} className="w-full h-full object-cover" alt="Poster" /> : <div className="w-full h-full flex items-center justify-center text-white/20">Sem Imagem</div>}
+                        {resolvePosterUrl(editForm.poster) ? <img src={resolvePosterUrl(editForm.poster)!} className="w-full h-full object-cover" alt="Poster" /> : <div className="w-full h-full flex items-center justify-center text-white/20">Sem Imagem</div>}
                         {editForm.logo_url && <img src={editForm.logo_url} className="absolute bottom-4 left-0 right-0 w-3/4 mx-auto object-contain h-12" alt="Logo" />}
                       </div>
                     </div>

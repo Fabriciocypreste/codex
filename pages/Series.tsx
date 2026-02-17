@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Media } from '../types';
 import MediaCard from '../components/MediaCard';
 import HeroBanner from '../components/HeroBanner';
-import { Search, Tv } from 'lucide-react';
+import { Tv } from 'lucide-react';
 import StreamingPlatforms, { platforms } from '../components/StreamingPlatforms';
 import MediaRow from '../components/MediaRow';
 import { playSelectSound } from '../utils/soundEffects';
@@ -21,6 +21,10 @@ const COLS_PER_ROW = 6;
 const Series: React.FC<SeriesProps> = ({ series, seriesByGenre, trendingSeries, onSelectMedia, onPlayMedia }) => {
   const [featured, setFeatured] = useState<Media | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
+  const [bgBackdrop, setBgBackdrop] = useState<string>('');
+
+  // Callback estável para o HeroBanner informar o backdrop atual
+  const handleBackdropChange = useCallback((url: string) => setBgBackdrop(url), []);
   const [localSeries, setLocalSeries] = useState<Media[] | null>(null);
   const [localSeriesByGenre, setLocalSeriesByGenre] = useState<Map<string, Media[]>>(new Map());
 
@@ -57,9 +61,31 @@ const Series: React.FC<SeriesProps> = ({ series, seriesByGenre, trendingSeries, 
   const effectiveSeries = (series && series.length > 0) ? series : (localSeries || []);
   const effectiveSeriesByGenre = (seriesByGenre && seriesByGenre.size > 0) ? seriesByGenre : localSeriesByGenre;
 
-  const filteredSeries = useMemo(() => filter
-    ? effectiveSeries.filter(s => s.title.toLowerCase().includes(filter.toLowerCase()))
-    : null, [effectiveSeries, filter]);
+  // Mapeamento de nomes do componente → nomes reais no DB
+  const platformAliases: Record<string, string[]> = useMemo(() => ({
+    'Netflix': ['netflix'],
+    'Prime Video': ['amazon prime video', 'prime video', 'amazon video'],
+    'Disney+': ['disney plus', 'disney+'],
+    'Max': ['hbo max', 'max'],
+    'Globoplay': ['globoplay'],
+    'Apple TV+': ['apple tv', 'apple tv+', 'apple tv store'],
+    'Paramount+': ['paramount plus', 'paramount+'],
+    'HBO Max': ['hbo max'],
+    'Pluto TV': ['pluto tv'],
+    'Crunchyroll': ['crunchyroll'],
+    'Claro Video': ['claro video', 'claro tv'],
+    'Warner Bros': ['warner'],
+  }), []);
+
+  const filteredSeries = useMemo(() => {
+    if (!filter) return null;
+    const aliases = platformAliases[filter] || [filter.toLowerCase()];
+    return effectiveSeries.filter(s => {
+      if (!s.platform) return false;
+      const p = s.platform.toLowerCase();
+      return aliases.some(alias => p.includes(alias));
+    });
+  }, [effectiveSeries, filter, platformAliases]);
 
   const handleSelect = useCallback((m: Media) => onSelectMedia(m), [onSelectMedia]);
 
@@ -73,10 +99,26 @@ const Series: React.FC<SeriesProps> = ({ series, seriesByGenre, trendingSeries, 
 
   return (
     <div className="w-full space-y-4 pb-20 animate-fade-in relative">
+      {/* === FUNDO DA PÁGINA: backdrop do banner com 60% blur === */}
+      {bgBackdrop && (
+        <div className="fixed inset-0 w-screen h-screen z-[-1] transition-opacity duration-700">
+          <img
+            src={bgBackdrop}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{
+              filter: 'blur(60px) brightness(0.4)',
+              transform: 'scale(1.15)',
+            }}
+          />
+          <div className="absolute inset-0 bg-black/50" />
+        </div>
+      )}
+
       {/* Hero Banner (Only shown if no filter) */}
       {!filter && (
         <div className="mt-0 relative z-0">
-          <HeroBanner mediaType="tv" onPlayMedia={onPlayMedia} onSelectMedia={onSelectMedia} dbMedia={effectiveSeries} />
+          <HeroBanner mediaType="tv" onPlayMedia={onPlayMedia} onSelectMedia={onSelectMedia} dbMedia={effectiveSeries} onBackdropChange={handleBackdropChange} />
         </div>
       )}
 
@@ -105,43 +147,21 @@ const Series: React.FC<SeriesProps> = ({ series, seriesByGenre, trendingSeries, 
                 Todos
               </button>
               <div className="h-6 w-px bg-white/20" />
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
-                <input
-                  type="text"
-                  placeholder="Buscar séries..."
-                  onChange={(e) => setFilter(e.target.value)}
-                  data-nav-item
-                  data-nav-col={1}
-                  tabIndex={0}
-                  className="bg-transparent border-none outline-none pl-10 py-2 text-sm text-white w-48 placeholder:text-white/20 focus:ring-2 focus:ring-[#E50914] rounded-full"
-                />
-              </div>
+              <button
+                onClick={() => { playSelectSound(); setFilter(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); playSelectSound(); setFilter(null); } }}
+                data-nav-item
+                data-nav-col={1}
+                tabIndex={0}
+                className="px-5 py-2 rounded-full font-bold text-sm text-red-500 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-[#E50914]"
+              >
+                Limpar Filtro
+              </button>
             </div>
           </div>
         )}
 
-        {!filter && (
-          <div className="px-12 flex justify-end items-center mb-4">
-            <div
-              className="flex items-center gap-4 glass p-2 px-4 rounded-full border-white/20"
-              data-nav-row={3}
-            >
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
-                <input
-                  type="text"
-                  placeholder="Buscar séries..."
-                  onChange={(e) => setFilter(e.target.value)}
-                  data-nav-item
-                  data-nav-col={1}
-                  tabIndex={0}
-                  className="bg-transparent border-none outline-none pl-10 py-2 text-sm text-white w-48 placeholder:text-white/20 focus:ring-2 focus:ring-[#E50914] rounded-full"
-                />
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Barra de busca removida da visão TV — usar página Search via menu */}
 
         {filter && platforms.find(p => p.name === filter) ? (
           <section className="space-y-8 animate-in fade-in duration-1000">

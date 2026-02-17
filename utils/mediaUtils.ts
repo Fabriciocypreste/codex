@@ -160,3 +160,43 @@ export function getMediaDuration(media: Media): string {
   }
   return media.type === 'movie' ? 'Filme' : 'Série';
 }
+
+/**
+ * Detectar plataforma/fonte a partir da URL de stream.
+ * Retorna nome legível ou null se não identificável.
+ */
+export function detectPlatformFromUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    // CDN / IPTV providers
+    if (hostname.includes('cdnapp') || hostname.includes('cdn.app')) return 'CDN App';
+    if (hostname.includes('xtream') || hostname.includes('xstream')) return 'Xtream';
+    if (hostname.includes('iptv')) return 'IPTV';
+    if (hostname.includes('m3u')) return 'IPTV';
+    // Cloud storage
+    if (hostname.includes('supabase')) return 'Supabase';
+    if (hostname.includes('cloudflare') || hostname.includes('r2.dev')) return 'Cloudflare';
+    if (hostname.includes('amazonaws') || hostname.includes('s3.')) return 'AWS S3';
+    if (hostname.includes('storage.googleapis')) return 'GCS';
+    if (hostname.includes('blob.core.windows')) return 'Azure';
+    // Streaming
+    if (hostname.includes('youtube') || hostname.includes('youtu.be')) return 'YouTube';
+    if (hostname.includes('vimeo')) return 'Vimeo';
+    if (hostname.includes('dailymotion')) return 'Dailymotion';
+    // Generic patterns
+    if (hostname.includes('stream') || hostname.includes('vod')) return 'VOD';
+    if (hostname.includes('api.')) return 'API Stream';
+    // Fallback: pegar domínio base (2 últimas partes)
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+      const domain = parts.slice(-2).join('.');
+      return domain;
+    }
+    return 'Desconhecido';
+  } catch {
+    // URL inválida
+    if (url.startsWith('/') || url.startsWith('./')) return 'Local';
+    return null;
+  }
+}

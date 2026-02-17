@@ -1,0 +1,7 @@
+# Copy the values below into your local `android/gradle.properties` (or CI secrets).
+# Do not commit real credentials.
+
+RELEASE_STORE_FILE=release-key.keystore
+RELEASE_STORE_PASSWORD=change-me
+RELEASE_KEY_ALIAS=change-me
+RELEASE_KEY_PASSWORD=change-me

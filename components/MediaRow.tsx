@@ -13,10 +13,16 @@ interface MediaRowProps {
     rowIndex?: number;
 }
 
+const INITIAL_SLICE = 10; // Renderizar apenas os primeiros 10 itens (TV Box 1-2 GB RAM)
+const SLICE_INCREMENT = 10; // Carregar mais 10 por vez ao scrollar
+
 const MediaRow: React.FC<MediaRowProps> = React.memo(({ title, items, onSelect, onPlay, showProgress, rowIndex = 0 }) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const sectionRef = useRef<HTMLDivElement>(null);
-    const [isVisible, setIsVisible] = useState(false);
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    // Primeiras 3 linhas sempre visíveis para evitar pular itens ao navegar com seta
+    const [isVisible, setIsVisible] = useState(rowIndex <= 3);
+    const [visibleCount, setVisibleCount] = useState(INITIAL_SLICE);
 
     // Lazy rendering: only render content when row is near viewport
     useEffect(() => {
@@ -28,11 +34,21 @@ const MediaRow: React.FC<MediaRowProps> = React.memo(({ title, items, onSelect, 
                     observer.disconnect();
                 }
             },
-            { rootMargin: '400px' } // Pre-load 400px before visible
+            { rootMargin: '600px' } // Pre-load 600px before visible (TV Box: nav rápida)
         );
         observer.observe(sectionRef.current);
         return () => observer.disconnect();
     }, []);
+
+    // TV Box: forçar renderização quando spatial nav foca esta row
+    // Se o elemento recebe focus mas ainda não renderizou itens, ativar imediatamente
+    useEffect(() => {
+        if (isVisible || !sectionRef.current) return;
+        const el = sectionRef.current;
+        const handleFocusIn = () => { setIsVisible(true); };
+        el.addEventListener('focusin', handleFocusIn);
+        return () => el.removeEventListener('focusin', handleFocusIn);
+    }, [isVisible]);
 
     // Deduplicate and filter invalid items
     const validItems = useMemo(() => {
@@ -42,6 +58,25 @@ const MediaRow: React.FC<MediaRowProps> = React.memo(({ title, items, onSelect, 
             return poster !== PLACEHOLDER_POSTER || m.backdrop;
         });
     }, [items]);
+
+    // Slice rendering: expandir ao atingir o sentinel
+    useEffect(() => {
+        if (!isVisible || !sentinelRef.current || visibleCount >= validItems.length) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setVisibleCount(prev => Math.min(prev + SLICE_INCREMENT, validItems.length));
+                }
+            },
+            { root: rowRef.current, rootMargin: '200px' }
+        );
+        observer.observe(sentinelRef.current);
+        return () => observer.disconnect();
+    }, [isVisible, visibleCount, validItems.length]);
+
+    // Itens renderizados (fatia atual)
+    const renderedItems = useMemo(() => validItems.slice(0, visibleCount), [validItems, visibleCount]);
+    const hasMore = visibleCount < validItems.length;
 
     const scroll = useMemo(() => (direction: 'left' | 'right') => {
         if (rowRef.current) {
@@ -92,7 +127,7 @@ const MediaRow: React.FC<MediaRowProps> = React.memo(({ title, items, onSelect, 
                         msOverflowStyle: 'none'
                     }}
                 >
-                    {isVisible ? validItems.map((m, idx) => (
+                    {isVisible ? renderedItems.map((m, idx) => (
                         <div key={`${m.type}-${m.tmdb_id || m.id}`} className="relative flex-shrink-0">
                             <MediaCard media={m} onClick={() => onSelect(m)} onPlay={onPlay ? () => onPlay(m) : undefined} colIndex={idx} />
                             {showProgress && (
@@ -104,6 +139,10 @@ const MediaRow: React.FC<MediaRowProps> = React.memo(({ title, items, onSelect, 
                     )) : (
                         /* Placeholder while off-screen */
                         <div style={{ height: '384px', width: '100%' }} className="bg-white/5 rounded-[24px] animate-pulse" />
+                    )}
+                    {/* Sentinel para carregar mais itens sob demanda */}
+                    {isVisible && hasMore && (
+                        <div ref={sentinelRef} className="flex-shrink-0 w-1 h-1" aria-hidden="true" />
                     )}
                 </div>
             </div>

@@ -1,8 +1,6 @@
 import { Channel } from '../types';
 import { getAllChannels } from './supabaseService';
 
-const CANAIS_JSON_URL = '/canais.json';
-
 let cachedChannels: Channel[] = [];
 
 export const channelsService = {
@@ -12,12 +10,14 @@ export const channelsService = {
         try {
             const data = await getAllChannels();
 
-            const allChannels: Channel[] = data.map((c) => ({
+            const allChannels: Channel[] = data.map((c: any) => ({
                 id: c.id,
-                nome: c.nome,
-                logo: c.logo || '',
-                genero: c.genero || 'Geral',
-                url: c.url,
+                name: c.name || c.nome || '',
+                logo: c.logo || c.logo_url || '',
+                category: c.category || c.genero || 'Geral',
+                stream_url: c.stream_url || c.url || '',
+                number: c.number,
+                is_premium: c.is_premium,
             }));
 
             cachedChannels = allChannels;
@@ -30,18 +30,18 @@ export const channelsService = {
 
     getCategories: async (): Promise<string[]> => {
         const channels = await channelsService.loadChannels();
-        const categories = Array.from(new Set(channels.map((c) => c.genero)));
+        const categories = Array.from(new Set(channels.map((c) => c.category)));
         return categories.sort();
     },
 
     getChannelsByCategory: async (category: string): Promise<Channel[]> => {
         const channels = await channelsService.loadChannels();
-        return channels.filter((c) => c.genero === category);
+        return channels.filter((c) => c.category === category);
     },
 
     searchChannels: async (query: string): Promise<Channel[]> => {
         const channels = await channelsService.loadChannels();
         const lowerQuery = query.toLowerCase();
-        return channels.filter((c) => c.nome.toLowerCase().includes(lowerQuery));
+        return channels.filter((c) => c.name.toLowerCase().includes(lowerQuery));
     }
 };

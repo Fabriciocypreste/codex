@@ -4,7 +4,7 @@ import { supabase } from '../services/supabaseService';
 import { useSpatialNav } from '../hooks/useSpatialNavigation';
 import MediaCard from '../components/MediaCard';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSearch, FaTimes, FaFilm, FaTv, FaBackspace } from 'react-icons/fa';
+import { Search as SearchIcon, X, Film, Tv, Delete } from 'lucide-react';
 import { playSelectSound, playNavigateSound } from '../utils/soundEffects';
 
 // ═══ TECLADO VIRTUAL VISIONOS ═══
@@ -22,8 +22,14 @@ interface SearchProps {
 }
 
 const Search: React.FC<SearchProps> = ({ onSelectMedia, onPlayMedia }) => {
-  const { setPosition } = useSpatialNav();
+  const { setEnabled } = useSpatialNav();
   
+  // Desabilitar spatial nav global — Search tem seu próprio handler D-Pad
+  useEffect(() => {
+    setEnabled(false);
+    return () => { setEnabled(true); };
+  }, [setEnabled]);
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Media[]>([]);
   const [loading, setLoading] = useState(false);
@@ -200,7 +206,9 @@ const Search: React.FC<SearchProps> = ({ onSelectMedia, onPlayMedia }) => {
           handleKeyPress(pressedKey);
         }
       } else if (focusArea === 'results') {
-        const cols = 5;
+        // Match the actual CSS grid: grid-cols-2 lg:grid-cols-3 xl:grid-cols-4
+        const screenWidth = window.innerWidth;
+        const cols = screenWidth >= 1280 ? 4 : screenWidth >= 1024 ? 3 : 2;
         const totalResults = results.length;
         if (key === 'ArrowRight') {
           e.preventDefault();
@@ -289,7 +297,7 @@ const Search: React.FC<SearchProps> = ({ onSelectMedia, onPlayMedia }) => {
             {/* Highlight visionOS */}
             <div className="absolute top-0 left-6 right-6 h-[1px] rounded-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)' }} />
             
-            <FaSearch className="text-white/30 text-base shrink-0" />
+            <SearchIcon className="text-white/30 text-base shrink-0" />
             <div className="flex-1 min-h-[28px] flex items-center">
               {query ? (
                 <span className="text-lg font-semibold text-white tracking-wide">{query}<span className="animate-pulse text-[#E50914] ml-0.5">|</span></span>
@@ -302,7 +310,7 @@ const Search: React.FC<SearchProps> = ({ onSelectMedia, onPlayMedia }) => {
                 onClick={clearSearch}
                 className="p-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] border border-white/[0.1] transition-all"
               >
-                <FaTimes className="text-sm text-white/50" />
+                <X className="text-sm text-white/50" />
               </button>
             )}
             {loading && (
@@ -366,7 +374,7 @@ const Search: React.FC<SearchProps> = ({ onSelectMedia, onPlayMedia }) => {
                           className={`absolute top-0 left-2 right-2 h-[1px] rounded-full transition-opacity ${isFocused ? 'opacity-50' : 'opacity-15'}`}
                           style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)' }}
                         />
-                        {isBackspace ? <FaBackspace className="text-base" /> : key}
+                        {isBackspace ? <Delete className="text-base" /> : key}
                       </button>
                     );
                   })}
@@ -377,8 +385,8 @@ const Search: React.FC<SearchProps> = ({ onSelectMedia, onPlayMedia }) => {
               <div className="flex gap-2 pt-2 border-t border-white/[0.06]">
                 {[
                   { key: 'all' as const, label: 'Tudo' },
-                  { key: 'movie' as const, label: 'Filmes', icon: FaFilm },
-                  { key: 'series' as const, label: 'Séries', icon: FaTv },
+                  { key: 'movie' as const, label: 'Filmes', icon: Film },
+                  { key: 'series' as const, label: 'Séries', icon: Tv },
                 ].map(({ key, label, icon: Icon }) => (
                   <button
                     key={key}
@@ -433,7 +441,7 @@ const Search: React.FC<SearchProps> = ({ onSelectMedia, onPlayMedia }) => {
                   exit={{ opacity: 0 }}
                   className="text-center py-16"
                 >
-                  <FaSearch className="text-4xl text-white/10 mx-auto mb-3" />
+                  <SearchIcon className="text-4xl text-white/10 mx-auto mb-3" />
                   <h3 className="text-lg font-bold text-white/40 mb-1">Nenhum resultado</h3>
                   <p className="text-xs text-white/20">Tente outras palavras-chave</p>
                 </motion.div>
@@ -486,7 +494,7 @@ const Search: React.FC<SearchProps> = ({ onSelectMedia, onPlayMedia }) => {
                   exit={{ opacity: 0 }}
                   className="text-center py-16"
                 >
-                  <FaSearch className="text-5xl text-white/[0.06] mx-auto mb-4" />
+                  <SearchIcon className="text-5xl text-white/[0.06] mx-auto mb-4" />
                   <h3 className="text-lg font-bold text-white/20 mb-1">Busque por conteúdo</h3>
                   <p className="text-xs text-white/10">Use o teclado para digitar</p>
                 </motion.div>
