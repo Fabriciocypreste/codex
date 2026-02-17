@@ -38,7 +38,7 @@ import AdminRoute from './components/AdminRoute';
 
 // Suspense fallback para lazy loading
 const LazyFallback = () => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, rgba(229,9,20,0.06) 0%, rgba(11,11,15,0.97) 60%, #0B0B0F 100%)' }}>
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0F]">
     <div className="flex flex-col items-center gap-5">
       <div className="relative">
         <svg className="w-20 h-20 animate-spin" style={{ animationDuration: '2.5s' }} viewBox="0 0 80 80">
@@ -433,7 +433,7 @@ const LegacyAppInner: React.FC = () => {
     const needsCatalog = ![Page.LOGIN, Page.PROFILES, Page.PLANS].includes(currentPage);
     if (loading && needsCatalog) {
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, rgba(229,9,20,0.06) 0%, rgba(11,11,15,0.97) 60%, #0B0B0F 100%)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0F]">
           <div className="flex flex-col items-center gap-5">
             <div className="relative">
               <svg className="w-20 h-20 animate-spin" style={{ animationDuration: '2.5s' }} viewBox="0 0 80 80">
@@ -577,8 +577,7 @@ const LegacyAppInner: React.FC = () => {
         </React.Suspense>
       </main>
 
-      {/* Volumetric Light Effects */}
-      <div className="fixed -bottom-24 left-1/2 -translate-x-1/2 w-200 h-100 bg-[#E50914]/10 rounded-full pointer-events-none -z-5" />
+      {/* Volumetric Light Effects — removido mancha vermelha */}
 
       {/* Modal: Tem certeza que deseja sair? (pressionar Voltar 2x na Home) */}
       {showExitConfirm && (

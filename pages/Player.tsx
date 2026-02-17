@@ -34,10 +34,8 @@ const Player: React.FC<PlayerProps> = ({ media, onClose, nextEpisode, onPlayNext
     return () => setEnabled(true);
   }, [setEnabled]);
 
-  // ═══ VINHETA — só em filmes/séries ═══
-  const [showIntro, setShowIntro] = useState(() => {
-    try { return !sessionStorage.getItem('redx_intro_shown'); } catch { return true; }
-  });
+  // ═══ VINHETA — antes de cada vídeo (6s), enquanto conteúdo carrega em paralelo ═══
+  const [showIntro, setShowIntro] = useState(true);
   const introVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // ═══ EXOPLAYER NATIVO — Fire Stick / TV Box ═══
@@ -138,7 +136,6 @@ const Player: React.FC<PlayerProps> = ({ media, onClose, nextEpisode, onPlayNext
 
   const skipIntro = useCallback(() => {
     setShowIntro(false);
-    try { sessionStorage.setItem('redx_intro_shown', '1'); } catch {}
     if (introVideoRef.current) { introVideoRef.current.pause(); introVideoRef.current.src = ''; }
   }, []);
 
@@ -146,7 +143,7 @@ const Player: React.FC<PlayerProps> = ({ media, onClose, nextEpisode, onPlayNext
     if (!showIntro) return;
     const h = (e: KeyboardEvent) => { if (['Enter', ' ', 'Escape'].includes(e.key)) { e.preventDefault(); skipIntro(); } };
     window.addEventListener('keydown', h);
-    const t = setTimeout(skipIntro, 8000);
+    const t = setTimeout(skipIntro, 6000); // vinheta 6s — conteúdo carrega em paralelo
     return () => { window.removeEventListener('keydown', h); clearTimeout(t); };
   }, [showIntro, skipIntro]);
 
@@ -307,10 +304,10 @@ const Player: React.FC<PlayerProps> = ({ media, onClose, nextEpisode, onPlayNext
 
   return (
     <div ref={containerRef} className="fixed inset-0 w-screen h-screen bg-black z-[9999] flex items-center justify-center overflow-hidden group" onMouseMove={resetControls} onClick={resetControls}>
-      {/* VINHETA */}
+      {/* VINHETA — 6s, carregada da raiz (/vinheta.mp4) enquanto conteúdo principal baixa em paralelo */}
       {showIntro && (
         <div className="absolute inset-0 z-[9999] bg-black flex items-center justify-center">
-          <video ref={introVideoRef} src="/vinheta.mp4" className="w-full h-full object-contain" autoPlay muted playsInline onEnded={skipIntro} onError={skipIntro} />
+          <video ref={introVideoRef} src="/vinheta.mp4" className="w-full h-full object-contain" autoPlay muted playsInline preload="auto" onEnded={skipIntro} onError={skipIntro} />
           <button onClick={skipIntro} className="absolute bottom-8 right-8 px-5 py-2 bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs uppercase tracking-[2px] font-semibold rounded-full hover:bg-white/20">Pular ›</button>
         </div>
       )}

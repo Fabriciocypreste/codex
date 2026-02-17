@@ -71,10 +71,10 @@ const MyList: React.FC<MyListProps> = ({ onSelectMedia, onPlayMedia }) => {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-8 pb-20 animate-fade-in px-12">
+    <div className="w-full max-w-7xl mx-auto space-y-8 pb-20 animate-fade-in px-12" style={{ paddingTop: '5cm' }}>
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-5xl font-black">Minha Lista</h1>
+        <h1 className="text-4xl font-black">Minha Lista</h1>
         <div className="text-white/40 text-sm font-medium uppercase tracking-[0.2em]">
           {myList.length} {myList.length === 1 ? 'Item Salvo' : 'Itens Salvos'}
         </div>

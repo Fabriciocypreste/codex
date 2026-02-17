@@ -568,8 +568,8 @@ const Settings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       default:
         return (
           <div className="space-y-10 animate-in fade-in slide-in-from-right-5 duration-500">
-            <div className="space-y-4">
-              <h2 className="text-4xl md:text-8xl font-black tracking-tighter">Perfis</h2>
+            <div className="space-y-4" style={{ marginTop: '3cm' }}>
+              <h2 className="text-2xl md:text-5xl font-black tracking-tighter">Perfis</h2>
               <p className="text-[10px] font-black uppercase tracking-[0.5em] text-red-600/60">Controle parental e permissões</p>
             </div>
 
@@ -1242,8 +1242,11 @@ const Settings: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   return (
-    <div className="relative min-h-screen z-50 animate-in fade-in slide-in-from-bottom-5 duration-700 responsive-container pt-24 md:pt-40 pb-20">
-      <div className="flex flex-col lg:flex-row gap-12 md:gap-20 items-start">
+    <div className="relative min-h-screen z-50 animate-in fade-in slide-in-from-bottom-5 duration-700 responsive-container pt-24 md:pt-40 pb-20 flex justify-center items-start">
+      <div
+        className="flex flex-col lg:flex-row gap-12 md:gap-20 items-start origin-top-center"
+        style={{ transform: 'scale(0.6)' }}
+      >
         {/* Sidebar Nav */}
         <aside className="lg:w-[320px] w-full" ref={sidebarRef}>
           <GlassPanel className="p-6! rounded-[3rem]! lg:sticky lg:top-40 border border-white/10 shadow-3xl">

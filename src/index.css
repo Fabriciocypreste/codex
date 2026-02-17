@@ -57,14 +57,14 @@ a:focus-visible,
   filter: brightness(1.1);
 }
 
-/* ── MediaCard: contorno de foco segue o formato arredondado do poster ── */
+/* ── MediaCard: contorno de foco segue o formato horizontal do card expandido, sem scale para evitar corte ── */
 [data-nav-media-card]:focus-visible {
   outline: none !important;
+  transform: none !important;
   box-shadow:
     0 0 0 var(--focus-outline-width) var(--focus-color),
     0 0 0 calc(var(--focus-outline-width) + 2px) rgba(0, 0, 0, 0.8),
     0 0 20px var(--focus-glow-color),
-    0 0 60px var(--focus-accent-glow),
     0 8px 32px rgba(0, 0, 0, 0.4) !important;
 }
 

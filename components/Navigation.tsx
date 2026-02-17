@@ -16,7 +16,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate, profil
     { id: Page.MOVIES, label: 'Filmes' },
     { id: Page.SERIES, label: 'Séries' },
     { id: Page.KIDS, label: 'Kids' },
-    { id: Page.LIVE, label: 'TV ao vivo' },
+    { id: Page.LIVE, label: 'Canais' },
     { id: Page.MY_LIST, label: 'Minha Lista' },
   ];
 
@@ -38,8 +38,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate, profil
             <button
               key={item.id}
               onClick={() => { playSelectSound(); onNavigate(item.id); }}
-              className={`text-[15px] font-medium transition-colors outline-none focus:text-white focus:scale-105
-                ${currentPage === item.id ? 'text-white font-bold' : 'text-gray-300 hover:text-white'}`}
+              className={`text-[15px] font-medium transition-all outline-none px-4 py-2 rounded-xl
+                ${currentPage === item.id
+                  ? 'bg-white text-black font-bold'
+                  : 'text-gray-300 hover:text-white focus:text-white focus:scale-105'}`}
               tabIndex={0}
               data-nav-item
               data-nav-col={idx}

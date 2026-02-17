@@ -14,6 +14,24 @@ const READ_TOKEN = import.meta.env.VITE_TMDB_READ_TOKEN;
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
+/** Normaliza resposta raw do TMDB para formato esperado pelo MediaCard (logo, backdrop, trailer) */
+function normalizeDetails(data: any): any {
+  if (!data || data.status_code) return null;
+  const logo = data.images?.logos?.find((l: any) => l.iso_639_1 === 'pt') ||
+    data.images?.logos?.find((l: any) => l.iso_639_1 === 'en') ||
+    data.images?.logos?.[0];
+  const trailer = data.videos?.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
+  return {
+    backdrop: data.backdrop_path ? `${IMAGE_BASE}/original${data.backdrop_path}` : undefined,
+    poster: data.poster_path ? `${IMAGE_BASE}/w500${data.poster_path}` : undefined,
+    logo: logo ? `${IMAGE_BASE}/original${logo.file_path}` : undefined,
+    trailer: trailer?.key,
+    description: data.overview,
+    year: data.release_date || data.first_air_date ? new Date(data.release_date || data.first_air_date).getFullYear() : undefined,
+    rating: data.vote_average?.toFixed?.(1)
+  };
+}
+
 const fetchOptions = {
   method: 'GET',
   headers: {
@@ -33,9 +51,9 @@ async function getOrFixDetails(localItem: any, type: 'movie' | 'tv'): Promise<an
   // 1. Tenta busca normal pelo ID
   if (tmdbId && Number(tmdbId) > 0) {
     try {
-      const details = await fetchDetails(Number(tmdbId), type);
-      if (details && !details.status_code) {
-        return details;
+      const raw = await fetchDetails(Number(tmdbId), type);
+      if (raw && !raw.status_code) {
+        return normalizeDetails(raw);
       }
     } catch (e) {
       console.warn(`[Auto-Heal] ID ${tmdbId} falhou para "${localItem.title}".`);
@@ -80,8 +98,9 @@ async function getOrFixDetails(localItem: any, type: 'movie' | 'tv'): Promise<an
       console.log(`[Auto-Heal] ✅ Corrigido "${searchName}": ${tmdbId} → ${correct.id}`);
     }
 
-    // 4. Retorna os detalhes com o ID correto
-    return await fetchDetails(correct.id, type);
+    // 4. Retorna os detalhes normalizados com o ID correto
+    const raw = await fetchDetails(correct.id, type);
+    return raw ? normalizeDetails(raw) : null;
   } catch (err) {
     console.error(`[Auto-Heal] Falha total para "${searchName}":`, err);
     return null;

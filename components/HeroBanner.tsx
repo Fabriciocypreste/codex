@@ -288,7 +288,7 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                   )}
                 </motion.div>
 
-                {/* Botão Assistir + Ícones Glass */}
+                {/* Botão Assistir + Ícones circulares (estilo referência) */}
                 <motion.div
                   initial={{ y: 10, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
@@ -296,17 +296,16 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                   className="flex items-center gap-3 w-full mt-1"
                   data-nav-row={1}
                 >
-                  {/* Assistir */}
+                  {/* Assistir — botão principal branco com ícone preto */}
                   <button
                     tabIndex={0}
                     data-nav-item
                     data-nav-col={0}
-                    className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl
-                      bg-white/90 text-black font-bold text-sm
-                      shadow-[0_4px_16px_rgba(0,0,0,0.25)]
-                      hover:bg-white hover:scale-[1.03] active:scale-95
+                    className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl
+                      bg-white text-black font-bold text-sm
+                      hover:bg-white/95 hover:scale-[1.02] active:scale-95
                       transition-all duration-200 outline-none
-                      focus-visible:ring-2 focus-visible:ring-white focus-visible:scale-[1.03]"
+                      focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                     onClick={() => {
                       playSelectSound();
                       if (onPlayMedia) onPlayMedia(movie);
@@ -314,25 +313,19 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                     }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLElement).click(); } }}
                   >
-                    <Play size={15} fill="black" /> Assistir
+                    <Play size={16} fill="black" /> Assistir
                   </button>
 
-                  {/* Ícone + (Minha Lista) — Glass */}
+                  {/* + (Minha Lista) — circular escuro */}
                   <button
                     tabIndex={0}
                     data-nav-item
                     data-nav-col={1}
                     className="w-11 h-11 flex items-center justify-center rounded-full
-                      border border-white/15 text-white/80
-                      hover:text-white hover:scale-110 hover:border-white/30 active:scale-90
+                      bg-black/70 text-white border border-white/20
+                      hover:bg-black/90 hover:scale-110 active:scale-95
                       transition-all duration-200 outline-none
                       focus-visible:ring-2 focus-visible:ring-white focus-visible:scale-110"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)',
-                      backdropFilter: 'blur(24px) saturate(1.4)',
-                      WebkitBackdropFilter: 'blur(24px) saturate(1.4)',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)',
-                    }}
                     title="Minha Lista"
                     onClick={() => { playSelectSound(); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLElement).click(); } }}
@@ -340,22 +333,16 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                     <Plus size={18} strokeWidth={2.5} />
                   </button>
 
-                  {/* Ícone Relógio (Assistir Depois) — Glass */}
+                  {/* Relógio (Assistir Depois) — circular escuro */}
                   <button
                     tabIndex={0}
                     data-nav-item
                     data-nav-col={2}
                     className="w-11 h-11 flex items-center justify-center rounded-full
-                      border border-white/15 text-white/80
-                      hover:text-white hover:scale-110 hover:border-white/30 active:scale-90
+                      bg-black/70 text-white border border-white/20
+                      hover:bg-black/90 hover:scale-110 active:scale-95
                       transition-all duration-200 outline-none
                       focus-visible:ring-2 focus-visible:ring-white focus-visible:scale-110"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)',
-                      backdropFilter: 'blur(24px) saturate(1.4)',
-                      WebkitBackdropFilter: 'blur(24px) saturate(1.4)',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)',
-                    }}
                     title="Assistir Depois"
                     onClick={() => { playSelectSound(); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLElement).click(); } }}
@@ -363,22 +350,16 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ mediaType = 'all', onPlayMedia,
                     <Clock size={18} strokeWidth={2} />
                   </button>
 
-                  {/* Ícone Info (Detalhes) — Glass */}
+                  {/* Info (Detalhes) — circular escuro */}
                   <button
                     tabIndex={0}
                     data-nav-item
                     data-nav-col={3}
                     className="w-11 h-11 flex items-center justify-center rounded-full
-                      border border-white/15 text-white/80
-                      hover:text-white hover:scale-110 hover:border-white/30 active:scale-90
+                      bg-black/70 text-white border border-white/20
+                      hover:bg-black/90 hover:scale-110 active:scale-95
                       transition-all duration-200 outline-none
                       focus-visible:ring-2 focus-visible:ring-white focus-visible:scale-110"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)',
-                      backdropFilter: 'blur(24px) saturate(1.4)',
-                      WebkitBackdropFilter: 'blur(24px) saturate(1.4)',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)',
-                    }}
                     title="Detalhes"
                     onClick={() => {
                       playSelectSound();

@@ -92,13 +92,13 @@ const MediaRow: React.FC<MediaRowProps> = React.memo(({ title, items, onSelect, 
     if (validItems.length === 0) return null;
 
     return (
-        <section ref={sectionRef} data-nav-row={rowIndex} className="px-12 relative group mt-8">
+        <section ref={sectionRef} data-nav-row={rowIndex} className="px-12 relative group mt-8 overflow-visible">
             <h2 className="text-2xl font-bold mb-8 flex items-center gap-4">
                 {title}
                 <div className="h-px flex-1 bg-linear-to-r from-white/20 to-transparent" />
             </h2>
 
-            <div className="relative">
+            <div className="relative overflow-visible">
                 {/* Navigation Buttons */}
                 <button
                     onClick={() => scroll('left')}
@@ -121,7 +121,7 @@ const MediaRow: React.FC<MediaRowProps> = React.memo(({ title, items, onSelect, 
                 <div
                     ref={rowRef}
                     data-nav-scroll
-                    className="flex gap-5 overflow-x-auto pb-12 px-4 -mx-4 scrollbar-hide scroll-smooth"
+                    className="flex gap-5 overflow-x-auto overflow-y-visible pb-12 pt-2 px-4 -mx-4 scrollbar-hide scroll-smooth"
                     style={{
                         scrollbarWidth: 'none',
                         msOverflowStyle: 'none'

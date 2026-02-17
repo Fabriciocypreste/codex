@@ -29,6 +29,7 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
   const [isFocused, setIsFocused] = useState(false);
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
   const [backdropUrl, setBackdropUrl] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -45,8 +46,13 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
   const cardRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // Total de botões: Assistir, Detalhes, Lista, Depois
+  // Total de botões: Assistir, Lista (+), Depois (relógio), Detalhes (info)
   const TOTAL_BTNS = 4;
+
+  // Reset logoError ao trocar de media
+  useEffect(() => {
+    setLogoError(false);
+  }, [media.id, media.tmdb_id]);
 
   // Check library status on mount
   useEffect(() => {
@@ -131,6 +137,8 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
 
       if (details.trailer) setTrailerKey(details.trailer);
       if (details.logo) setLogoUrl(details.logo);
+      else setLogoUrl(null);
+      setLogoError(false);
       if (details.backdrop) setBackdropUrl(details.backdrop);
     } catch {
       setHasLoaded(true);
@@ -175,14 +183,14 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
     onClick();
   }, [onClick]);
 
-  // Executar ação do botão ativo
+  // Executar ação do botão ativo (ordem: Assistir, Lista, Depois, Detalhes)
   const executeButton = useCallback((idx: number) => {
     playSelectSound();
     switch (idx) {
       case 0: goToWatch(); break;       // Assistir
-      case 1: goToDetails(); break;     // Detalhes
-      case 2: handleToggleWatchlist(); break; // Lista
-      case 3: handleToggleWatchLater(); break; // Depois
+      case 1: handleToggleWatchlist(); break; // Lista (+)
+      case 2: handleToggleWatchLater(); break; // Depois (relógio)
+      case 3: goToDetails(); break;     // Detalhes (info)
     }
   }, [goToWatch, goToDetails, handleToggleWatchlist, handleToggleWatchLater]);
 
@@ -235,6 +243,28 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
       }
     }
   }, [buttonMode, activeBtn, executeButton]);
+
+  // Interceptar ArrowLeft/Right em fase de captura quando em buttonMode — evita spatial nav pular para próximo card
+  useEffect(() => {
+    if (!buttonMode) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const target = e.target as HTMLElement;
+        if (cardRef.current?.contains(target)) {
+          e.preventDefault();
+          e.stopPropagation();
+          playNavigateSound();
+          if (e.key === 'ArrowLeft') {
+            setActiveBtn(prev => Math.max(0, prev - 1));
+          } else {
+            setActiveBtn(prev => Math.min(TOTAL_BTNS - 1, prev + 1));
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handler, { capture: true });
+    return () => window.removeEventListener('keydown', handler, { capture: true });
+  }, [buttonMode]);
 
   // Cleanup
   useEffect(() => {
@@ -311,7 +341,7 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
                 <img
                   src={backdropUrl || media.backdrop || poster}
                   alt={media.title}
-                  className="absolute inset-0 w-full h-full object-cover opacity-70"
+                  className="absolute inset-0 w-full h-full object-cover object-top opacity-70"
                 />
                 {/* Gradiente cinematic — escurece base e laterais */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent z-10" />
@@ -331,14 +361,14 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
 
               {/* ── CONTEÚDO SOBREPOSTO ── */}
               <div className="relative z-30 p-3 pb-2.5 flex flex-col justify-end gap-2">
-                {/* Logo / Título do filme — sempre logo quando disponível */}
+                {/* Logo do filme/série via API TMDB (VITE_TMDB_READ_TOKEN no .env) — fallback para título */}
                 <div className="flex items-end mb-0.5">
-                  {logoUrl ? (
+                  {logoUrl && !logoError ? (
                     <img
                       src={logoUrl}
                       alt={media.title}
                       className="max-h-[32px] max-w-[55%] object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      onError={() => setLogoError(true)}
                     />
                   ) : (
                     <h3 className="text-[13px] font-black uppercase tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] line-clamp-1 leading-tight">
@@ -347,102 +377,59 @@ const MediaCard: React.FC<MediaCardProps> = React.memo(({ media, onClick, onPlay
                   )}
                 </div>
 
-                {/* Botões de ação — glass transparente com backdrop-blur */}
-                <div className="flex items-center gap-1.5">
-                  {/* ▶ ASSISTIR — glass com borda branca */}
+                {/* Botões — estilo referência: Assistir branco, demais circulares escuros */}
+                <div className="flex items-center gap-2">
+                  {/* Assistir — botão principal branco */}
                   <button
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); goToWatch(e); }}
                     tabIndex={-1}
-                    className={`py-1.5 px-3 rounded-lg text-white font-bold uppercase tracking-wider text-[9px]
-                      flex items-center gap-1.5
-                      transition-all duration-200 ease-out
-                      ${buttonMode && activeBtn === 0
-                        ? 'border-2 border-white scale-110 shadow-[0_0_20px_rgba(255,255,255,0.3)]'
-                        : 'border border-white/60'
-                      }`}
+                    className={`py-1.5 px-3 rounded-xl font-bold text-[10px] flex items-center gap-1.5 transition-all
+                      ${buttonMode && activeBtn === 0 ? 'scale-110 ring-2 ring-white' : ''}`}
                     style={{
-                      backgroundColor: buttonMode && activeBtn === 0 ? 'rgba(255,255,255,0.25)' : 'rgba(40,40,40,0.95)',
-                      boxShadow: buttonMode && activeBtn === 0
-                        ? '0 0 20px rgba(255,255,255,0.3)'
-                        : '0 0 12px rgba(255,255,255,0.15)',
+                      backgroundColor: 'rgba(255,255,255,0.95)',
+                      color: '#000',
                     }}
                   >
-                    <Play size={10} fill="currentColor" /> Assistir
+                    <Play size={11} fill="black" /> Assistir
                   </button>
 
-                  {/* Detalhes — glass pill */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); goToDetails(); }}
-                    tabIndex={-1}
-                    className={`py-1.5 px-2.5 rounded-lg text-white font-bold uppercase tracking-wider text-[9px]
-                      flex items-center gap-1
-                      transition-all duration-200 ease-out
-                      ${buttonMode && activeBtn === 1
-                        ? 'border-2 border-white scale-110 shadow-[0_0_20px_rgba(255,255,255,0.3)]'
-                        : 'border border-transparent'
-                      }`}
-                    style={{
-                      backgroundColor: buttonMode && activeBtn === 1 ? 'rgba(255,255,255,0.25)' : 'rgba(40,40,40,0.95)',
-                    }}
-                    title="Detalhes"
-                  >
-                    <Info size={10} strokeWidth={2.5} /> Detalhes
-                  </button>
-
-                  {/* Minha Lista — glass pill (toggle) */}
+                  {/* + (Minha Lista) — circular escuro */}
                   <button
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleWatchlist(e); }}
                     tabIndex={-1}
-                    className={`py-1.5 px-2.5 rounded-lg font-bold uppercase tracking-wider text-[9px]
-                      flex items-center gap-1
-                      transition-all duration-200 ease-out
-                      ${buttonMode && activeBtn === 2
-                        ? 'border-2 border-white scale-110 shadow-[0_0_20px_rgba(255,255,255,0.3)]'
-                        : 'border border-transparent'
-                      }
-                      ${inWatchlist
-                        ? 'text-green-400'
-                        : 'text-white'
-                      }`}
-                    style={{
-                      backgroundColor: buttonMode && activeBtn === 2
-                        ? 'rgba(255,255,255,0.25)'
-                        : inWatchlist ? 'rgba(34,197,94,0.3)' : 'rgba(40,40,40,0.95)',
-                    }}
+                    className={`w-8 h-8 flex items-center justify-center rounded-full text-white border border-white/20 transition-all
+                      ${buttonMode && activeBtn === 1 ? 'scale-110 ring-2 ring-white' : ''}
+                      ${inWatchlist ? 'bg-green-600/80' : 'bg-black/70'}`}
                     title={inWatchlist ? 'Remover da Lista' : 'Minha Lista'}
                   >
-                    {inWatchlist ? <Check size={10} strokeWidth={2.5} /> : <Plus size={10} strokeWidth={2.5} />}
-                    {inWatchlist ? 'Na Lista' : 'Lista'}
+                    {inWatchlist ? <Check size={12} strokeWidth={2.5} /> : <Plus size={12} strokeWidth={2.5} />}
                   </button>
 
-                  {/* Assistir Depois — glass pill (toggle) */}
+                  {/* Relógio (Assistir Depois) — circular escuro */}
                   <button
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleWatchLater(e); }}
                     tabIndex={-1}
-                    className={`py-1.5 px-2.5 rounded-lg font-bold uppercase tracking-wider text-[9px]
-                      flex items-center gap-1
-                      transition-all duration-200 ease-out
-                      ${buttonMode && activeBtn === 3
-                        ? 'border-2 border-white scale-110 shadow-[0_0_20px_rgba(255,255,255,0.3)]'
-                        : 'border border-transparent'
-                      }
-                      ${inWatchLater
-                        ? 'text-blue-400'
-                        : 'text-white'
-                      }`}
-                    style={{
-                      backgroundColor: buttonMode && activeBtn === 3
-                        ? 'rgba(255,255,255,0.25)'
-                        : inWatchLater ? 'rgba(59,130,246,0.3)' : 'rgba(40,40,40,0.95)',
-                    }}
+                    className={`w-8 h-8 flex items-center justify-center rounded-full text-white border border-white/20 transition-all
+                      ${buttonMode && activeBtn === 2 ? 'scale-110 ring-2 ring-white' : ''}
+                      ${inWatchLater ? 'bg-blue-600/80' : 'bg-black/70'}`}
                     title={inWatchLater ? 'Remover' : 'Ver Depois'}
                   >
-                    <Clock size={10} strokeWidth={2.5} />
-                    {inWatchLater ? 'Salvo' : 'Depois'}
+                    <Clock size={12} strokeWidth={2.5} />
+                  </button>
+
+                  {/* Info (Detalhes) — circular escuro */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); goToDetails(); }}
+                    tabIndex={-1}
+                    className={`w-8 h-8 flex items-center justify-center rounded-full text-white border border-white/20 bg-black/70 transition-all
+                      ${buttonMode && activeBtn === 3 ? 'scale-110 ring-2 ring-white' : ''}`}
+                    title="Detalhes"
+                  >
+                    <Info size={12} strokeWidth={2.5} />
                   </button>
                 </div>
 
